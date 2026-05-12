@@ -125,6 +125,13 @@ header { background: linear-gradient(135deg, #0c4a6e, #0369a1); color: white; pa
 .shade-fill.n { background: #94a3b8; }
 .shade-fill.c { background: linear-gradient(90deg, var(--sky), var(--mint)); }
 .r-reason { font-size: 11px; color: var(--text2); background: rgba(56,189,248,0.08); border-left: 3px solid var(--sky); padding: 6px 8px; border-radius: 0 6px 6px 0; line-height: 1.5; }
+.ai-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; background: linear-gradient(135deg, #7c3aed, #2563eb); color: white; margin-bottom: 5px; }
+.heat-risk-bar { display: flex; gap: 6px; margin: 6px 0; }
+.risk-item { flex: 1; text-align: center; padding: 5px 4px; border-radius: 8px; font-size: 10px; font-weight: 700; }
+.risk-item.red    { background: #fee2e2; color: #991b1b; }
+.risk-item.orange { background: #ffedd5; color: #9a3412; }
+.risk-item.yellow { background: #fef9c3; color: #854d0e; }
+.risk-item.green  { background: #dcfce7; color: #166534; }
 
 /* SHELTER LIST */
 .shelter-item { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #f1f5f9; font-size: 12px; cursor: pointer; }
@@ -587,8 +594,6 @@ async function findRoute() {
     }
 
     // ── 카드 업데이트 ──────────────────────────────────────
-    // duration_min: 백엔드에서 계산된 분 단위 소요시간
-    // sun_exposure_min: 백엔드에서 계산된 직사광선 노출 시간(분)
     const nTime = data.normal.duration_min ?? Math.round(data.normal.duration / 60);
     const cTime = data.climate.duration_min ?? Math.round(data.climate.duration / 60);
     const nSun  = data.normal.sun_exposure_min  ?? Math.round(nTime * (1 - data.normal.shade_score));
@@ -606,6 +611,8 @@ async function findRoute() {
       cShelter: data.climate.shelter_count ?? 0,
       cSun:     cSun + '분',
       reason:   data.reason,
+      heatRisk: data.heat_risk || {},
+      aiPowered: data.ai_powered || false,
     });
 
     drawNormal(normalCoords);
@@ -982,8 +989,27 @@ function updateCards(d) {
   document.getElementById('c-sun').textContent     = d.cSun;
   document.getElementById('c-spct').textContent    = d.cShade+'%';
   document.getElementById('c-sbar').style.width    = d.cShade+'%';
+
+  // 열사병 위험도 + AI 배지
   const r = document.getElementById('r-reason');
-  r.innerHTML = d.reason; r.style.display='block';
+  const nr = d.heatRisk?.normal  || {};
+  const cr = d.heatRisk?.climate || {};
+
+  let html = '';
+  if (d.aiPowered) {
+    html += `<div class="ai-badge">✨ AI 분석</div>`;
+  }
+  if (nr.level && cr.level) {
+    html += `
+      <div class="heat-risk-bar">
+        <div class="risk-item ${nr.color}">${nr.emoji} 일반 ${nr.level}</div>
+        <div style="display:flex;align-items:center;font-size:14px">→</div>
+        <div class="risk-item ${cr.color}">${cr.emoji} 추천 ${cr.level}</div>
+      </div>`;
+  }
+  html += `<div>${d.reason}</div>`;
+  r.innerHTML = html;
+  r.style.display = 'block';
 }
 
 // =============================================================================
