@@ -21,173 +21,206 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
 <style>
+/* ── 애플 스타일 디자인 시스템 ── */
 :root {
-  --sky: #38bdf8;
-  --sky-dark: #0284c7;
-  --mint: #34d399;
-  --mint-dark: #059669;
-  --danger: #ef4444;
-  --warn: #f97316;
-  --bg: #f0f9ff;
-  --surface: #fff;
-  --border: #bae6fd;
-  --text: #0c4a6e;
-  --text2: #0369a1;
-  --text3: #64748b;
-  --font: 'Noto Sans KR', sans-serif;
-  --mono: 'Space Mono', monospace;
+  --accent: #0071e3;       /* 애플 블루 */
+  --accent-light: #e8f2ff;
+  --green: #30d158;        /* 애플 그린 */
+  --green-dark: #248a3d;
+  --red: #ff3b30;
+  --orange: #ff9500;
+  --yellow: #ffd60a;
+  --bg: #f5f5f7;           /* 애플 배경 */
+  --surface: #ffffff;
+  --surface2: #f5f5f7;
+  --border: rgba(0,0,0,0.08);
+  --text: #1d1d1f;
+  --text2: #424245;
+  --text3: #86868b;
+  --font: -apple-system, 'Noto Sans KR', BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+  --mono: 'SF Mono', 'Space Mono', monospace;
+  --radius: 14px;
+  --radius-sm: 10px;
+  --shadow: 0 2px 20px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 40px rgba(0,0,0,0.12);
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: var(--font); background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; -webkit-font-smoothing: antialiased; }
 
-/* HEADER */
-header { background: linear-gradient(135deg, #0c4a6e, #0369a1); color: white; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 12px; flex-wrap: wrap; }
-.brand { display: flex; align-items: baseline; gap: 8px; }
-.brand h1 { font-size: 20px; font-weight: 900; }
-.brand h1 span { color: var(--mint); }
-.brand .sub { font-size: 11px; opacity: 0.55; letter-spacing: 1px; }
-.slogan { font-size: 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; padding: 5px 14px; }
-.slogan b { color: #fbbf24; }
+/* ── HEADER ── */
+header {
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px;
+  height: 52px;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-icon { width: 28px; height: 28px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.brand h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.4px; color: var(--text); }
+.brand h1 span { color: var(--accent); }
+.slogan { font-size: 11px; color: var(--text3); font-weight: 400; }
 
-/* SEASON TABS */
-.season-bar { background: #075985; border-bottom: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; }
-.season-tabs { display: flex; padding: 0 16px; }
-.s-tab { padding: 9px 18px; font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.45); cursor: pointer; border: none; background: none; border-bottom: 3px solid transparent; transition: all 0.2s; font-family: var(--font); white-space: nowrap; }
-.s-tab.active { color: #fff; border-bottom-color: var(--mint); font-weight: 700; }
-.s-tab.off { opacity: 0.35; cursor: not-allowed; }
+/* ── SEASON TABS ── */
+.season-bar { background: rgba(255,255,255,0.85); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); flex-shrink: 0; padding: 0 16px; }
+.season-tabs { display: flex; gap: 2px; }
+.s-tab { padding: 8px 14px; font-size: 12px; font-weight: 500; color: var(--text3); cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; transition: all 0.2s; font-family: var(--font); white-space: nowrap; letter-spacing: -0.2px; }
+.s-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.s-tab.off { opacity: 0.4; cursor: not-allowed; }
 
-/* LAYOUT */
+/* ── LAYOUT ── */
 .layout { flex: 1; display: flex; overflow: hidden; }
 
-/* SIDEBAR */
-.sidebar { width: 310px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; }
-.sec { padding: 14px 16px; border-bottom: 1px solid var(--border); }
-.sec-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text3); margin-bottom: 10px; }
+/* ── SIDEBAR ── */
+.sidebar { width: 320px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; }
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 2px; }
+.sec { padding: 16px; border-bottom: 1px solid var(--border); }
+.sec-title { font-size: 11px; font-weight: 600; letter-spacing: 0.4px; color: var(--text3); margin-bottom: 12px; text-transform: uppercase; }
 
-/* SEARCH */
-.search-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
-.search-label { font-size: 13px; font-weight: 900; width: 20px; flex-shrink: 0; }
-.search-label.a { color: #10b981; }
-.search-label.b { color: #ef4444; }
-.search-input { flex: 1; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-family: var(--font); color: var(--text); outline: none; transition: border-color 0.2s; }
-.search-input:focus { border-color: var(--sky-dark); }
-.search-btn { padding: 8px 10px; background: var(--sky-dark); color: white; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: var(--font); white-space: nowrap; }
-.find-btn { width: 100%; padding: 11px; background: linear-gradient(135deg, var(--sky-dark), var(--mint-dark)); color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: var(--font); margin-top: 8px; transition: opacity 0.2s; }
-.find-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.search-row-wrap { position: relative; flex: 1; }
-.search-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); z-index: 9999; max-height: 180px; overflow-y: auto; }
-.search-dropdown-item { padding: 10px 12px; font-size: 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; }
+/* ── SEARCH ── */
+.search-stack { display: flex; flex-direction: column; gap: 1px; background: var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 10px; }
+.search-row { display: flex; align-items: center; background: var(--surface2); }
+.search-row:first-child { border-radius: var(--radius) var(--radius) 0 0; }
+.search-row:last-child { border-radius: 0 0 var(--radius) var(--radius); }
+.search-label { font-size: 12px; font-weight: 700; width: 36px; text-align: center; flex-shrink: 0; }
+.search-label.a { color: var(--green-dark); }
+.search-label.b { color: var(--red); }
+.search-divider { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; }
+.search-input { flex: 1; padding: 11px 10px; border: none; background: transparent; font-size: 14px; font-family: var(--font); color: var(--text); outline: none; }
+.search-input::placeholder { color: var(--text3); }
+.search-btn { padding: 8px 12px; background: transparent; color: var(--accent); border: none; font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--font); white-space: nowrap; }
+.search-row-wrap { flex: 1; position: relative; }
+.search-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: white; border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); z-index: 9999; max-height: 180px; overflow-y: auto; border: 1px solid var(--border); }
+.search-dropdown-item { padding: 10px 14px; font-size: 13px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.15s; }
 .search-dropdown-item:last-child { border-bottom: none; }
-.search-dropdown-item:hover { background: #e0f2fe; }
+.search-dropdown-item:hover { background: var(--accent-light); }
+.find-btn { width: 100%; padding: 12px; background: var(--accent); color: white; border: none; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; cursor: pointer; font-family: var(--font); transition: opacity 0.2s; letter-spacing: -0.2px; }
+.find-btn:hover { opacity: 0.88; }
+.find-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.search-hint { font-size: 11px; color: var(--text3); margin-top: 7px; text-align: center; }
 
-/* PRESETS */
-.preset-btn { width: 100%; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border); background: #f8fafc; cursor: pointer; text-align: left; font-size: 12px; color: var(--text); font-family: var(--font); margin-bottom: 5px; transition: all 0.2s; display: flex; align-items: center; gap: 8px; }
-.preset-btn:hover, .preset-btn.active { background: #e0f2fe; border-color: var(--sky); }
+/* ── TIME BADGE ── */
+.time-bar { display: flex; align-items: center; justify-content: space-between; }
+.time-display { display: flex; align-items: baseline; gap: 6px; }
+.time-val { font-size: 22px; font-weight: 700; font-family: var(--mono); color: var(--text); letter-spacing: -1px; }
+.heat-chip { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 20px; background: #fff3cd; color: #856404; }
+.heat-chip.hot { background: #ffe0de; color: #c0392b; }
+.weather-info { font-size: 11px; color: var(--text3); text-align: right; line-height: 1.4; }
 
-
-
-/* TIME BADGE */
-.heat-chip { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; background: #fef3c7; color: #92400e; }
-.heat-chip.hot { background: #fee2e2; color: #991b1b; }
-
-/* ROUTE CARDS */
+/* ── ROUTE CARDS ── */
 .route-cards { display: flex; flex-direction: column; gap: 8px; }
 .r-card {
-  border-radius: 10px; border: 2px solid var(--border); padding: 11px; background: #f8fafc;
-  cursor: pointer; transition: all 0.2s;
-  position: relative;
+  border-radius: var(--radius-sm); border: 1.5px solid var(--border);
+  padding: 12px; background: var(--surface2);
+  cursor: pointer; transition: all 0.2s; position: relative;
 }
-.r-card:hover { border-color: #94a3b8; }
-.r-card.cs { border-color: var(--sky); background: #f0f9ff; }
-.r-card.cs:hover { border-color: var(--sky-dark); }
-/* 선택 강조 */
-.r-card.focused { box-shadow: 0 0 0 3px rgba(56,189,248,0.35); }
-.r-card.focused.normal-card { box-shadow: 0 0 0 3px rgba(148,163,184,0.4); }
-.r-card-click-hint {
-  position: absolute; top: 8px; right: 8px;
-  font-size: 9px; color: var(--text3); background: #f1f5f9;
-  padding: 2px 6px; border-radius: 10px; font-weight: 500;
-}
-.r-head { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; }
-.r-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.r-dot.n { background: #94a3b8; }
-.r-dot.c { background: var(--sky); box-shadow: 0 0 6px rgba(56,189,248,0.5); }
-.r-title { font-size: 12px; font-weight: 700; }
-.r-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 7px; }
-.st-label { font-size: 10px; color: var(--text3); }
-.st-val { font-size: 13px; font-weight: 700; }
-.st-val.g { color: var(--mint-dark); }
-.st-val.r { color: var(--danger); }
-.shade-wrap { margin-bottom: 5px; }
-.shade-top { display: flex; justify-content: space-between; font-size: 10px; color: var(--text3); margin-bottom: 3px; }
-.shade-bg { height: 5px; background: #e2e8f0; border-radius: 3px; overflow: hidden; }
-.shade-fill { height: 100%; border-radius: 3px; transition: width 0.7s ease; }
-.shade-fill.n { background: #94a3b8; }
-.shade-fill.c { background: linear-gradient(90deg, var(--sky), var(--mint)); }
-.r-reason { font-size: 11px; color: var(--text2); background: rgba(56,189,248,0.08); border-left: 3px solid var(--sky); padding: 6px 8px; border-radius: 0 6px 6px 0; line-height: 1.5; }
-.ai-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; background: linear-gradient(135deg, #7c3aed, #2563eb); color: white; margin-bottom: 5px; }
-.heat-risk-bar { display: flex; gap: 6px; margin: 6px 0; }
-.risk-item { flex: 1; text-align: center; padding: 5px 4px; border-radius: 8px; font-size: 10px; font-weight: 700; }
-.risk-item.red    { background: #fee2e2; color: #991b1b; }
-.risk-item.orange { background: #ffedd5; color: #9a3412; }
-.risk-item.yellow { background: #fef9c3; color: #854d0e; }
-.risk-item.green  { background: #dcfce7; color: #166534; }
+.r-card:hover { border-color: #c7c7cc; background: white; }
+.r-card.cs { border-color: var(--accent); background: var(--accent-light); }
+.r-card.focused { box-shadow: 0 0 0 3px rgba(0,113,227,0.2); }
+.r-card.focused.normal-card { box-shadow: 0 0 0 3px rgba(0,0,0,0.08); }
+.r-card-click-hint { position: absolute; top: 8px; right: 8px; font-size: 9px; color: var(--text3); background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 6px; font-weight: 500; }
+.r-head { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+.r-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.r-dot.n { background: #aeaeb2; }
+.r-dot.c { background: var(--accent); box-shadow: 0 0 0 3px rgba(0,113,227,0.2); }
+.r-title { font-size: 12px; font-weight: 600; color: var(--text); letter-spacing: -0.2px; }
+.r-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.stat-block { background: rgba(255,255,255,0.7); border-radius: 8px; padding: 7px 9px; }
+.st-label { font-size: 10px; color: var(--text3); font-weight: 500; margin-bottom: 1px; }
+.st-val { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
+.st-val.g { color: var(--green-dark); }
+.st-val.r { color: var(--red); }
+.shade-wrap { margin-bottom: 6px; }
+.shade-top { display: flex; justify-content: space-between; font-size: 10px; color: var(--text3); margin-bottom: 4px; font-weight: 500; }
+.shade-bg { height: 4px; background: rgba(0,0,0,0.08); border-radius: 2px; overflow: hidden; }
+.shade-fill { height: 100%; border-radius: 2px; transition: width 0.8s cubic-bezier(0.34,1.56,0.64,1); }
+.shade-fill.n { background: #aeaeb2; }
+.shade-fill.c { background: linear-gradient(90deg, var(--accent), var(--green)); }
+.r-reason { font-size: 11px; color: var(--text2); background: rgba(0,113,227,0.06); border-left: 2px solid var(--accent); padding: 7px 9px; border-radius: 0 8px 8px 0; line-height: 1.55; margin-top: 4px; }
+.ai-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 8px; background: linear-gradient(135deg, #5e5ce6, #0071e3); color: white; margin-bottom: 5px; letter-spacing: 0.1px; }
+.heat-risk-bar { display: flex; gap: 5px; margin: 6px 0; }
+.risk-item { flex: 1; text-align: center; padding: 5px 4px; border-radius: 8px; font-size: 10px; font-weight: 600; }
+.risk-item.red    { background: #ffe0de; color: #c0392b; }
+.risk-item.orange { background: #fff0d4; color: #9a3412; }
+.risk-item.yellow { background: #fff9e6; color: #856404; }
+.risk-item.green  { background: #d4f5e2; color: #248a3d; }
 
-/* SHELTER LIST */
-.shelter-item { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #f1f5f9; font-size: 12px; cursor: pointer; }
+/* ── SHELTER LIST ── */
+.shelter-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12px; cursor: pointer; transition: color 0.15s; }
 .shelter-item:last-child { border-bottom: none; }
-.shelter-item:hover { color: var(--sky-dark); }
+.shelter-item:hover { color: var(--accent); }
 
-/* MAP */
+/* ── MAP ── */
 .map-wrap { flex: 1; position: relative; }
 #map { width: 100%; height: 100%; }
 
-/* MAP CONTROLS */
+/* ── MAP CONTROLS — 애플 통일 스타일 ── */
 .map-controls { position: absolute; top: 12px; left: 12px; z-index: 1000; display: flex; flex-direction: column; gap: 6px; }
-.map-ctrl-btn { padding: 8px 14px; background: white; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-weight: 700; color: var(--text); cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.1); font-family: var(--font); white-space: nowrap; transition: all 0.2s; }
-.map-ctrl-btn:hover { background: #e0f2fe; }
-.map-ctrl-btn.active { background: var(--sky-dark); color: white; border-color: var(--sky-dark); }
+.map-btn {
+  padding: 8px 13px;
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0,0,0,0.1);
+  border-radius: var(--radius-sm);
+  font-size: 12px; font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: 0 1px 8px rgba(0,0,0,0.1);
+  font-family: var(--font);
+  white-space: nowrap;
+  transition: all 0.18s;
+  letter-spacing: -0.2px;
+}
+.map-btn:hover { background: white; box-shadow: 0 2px 12px rgba(0,0,0,0.14); }
+.map-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+.map-btn.locating { background: var(--accent); color: white; border-color: var(--accent); animation: pulse-btn 1s ease-in-out infinite; }
+@keyframes pulse-btn { 0%,100%{opacity:1} 50%{opacity:0.75} }
 
-/* MAP ROUTE LEGEND (지도 위) */
+/* ── MAP ROUTE LEGEND ── */
 .map-route-legend {
   position: absolute; bottom: 28px; left: 12px; z-index: 1000;
-  background: rgba(255,255,255,0.95); border: 1px solid var(--border);
-  border-radius: 10px; padding: 10px 14px; font-size: 11px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: none;
+  background: rgba(255,255,255,0.92); backdrop-filter: blur(12px);
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: var(--radius-sm); padding: 10px 14px; font-size: 11px;
+  box-shadow: var(--shadow); display: none;
 }
 .map-route-legend.show { display: block; }
 .legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; cursor: pointer; padding: 3px 4px; border-radius: 6px; transition: background 0.15s; }
 .legend-row:last-child { margin-bottom: 0; }
-.legend-row:hover { background: #f0f9ff; }
-.legend-row.focused { background: #e0f2fe; font-weight: 700; }
-.legend-line { width: 28px; height: 4px; border-radius: 2px; flex-shrink: 0; }
-.legend-line.n { background: #94a3b8; }
-.legend-line.c { background: var(--sky-dark); }
+.legend-row:hover { background: var(--accent-light); }
+.legend-row.focused { background: var(--accent-light); font-weight: 700; color: var(--accent); }
+.legend-line { width: 24px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+.legend-line.n { background: #aeaeb2; }
+.legend-line.c { background: var(--accent); }
 
-/* SUN BOX */
-
-
-/* LOADING */
-.loading-overlay { position: absolute; inset: 0; background: rgba(240,249,255,0.85); display: none; align-items: center; justify-content: center; z-index: 2000; backdrop-filter: blur(2px); }
+/* ── LOADING ── */
+.loading-overlay { position: absolute; inset: 0; background: rgba(245,245,247,0.85); display: none; align-items: center; justify-content: center; z-index: 2000; backdrop-filter: blur(8px); }
 .loading-overlay.show { display: flex; }
-.loading-box { background: white; border-radius: 16px; padding: 24px 32px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.1); }
-.spinner { width: 36px; height: 36px; border: 3px solid #e0f2fe; border-top-color: var(--sky-dark); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+.loading-box { background: white; border-radius: 20px; padding: 28px 36px; text-align: center; box-shadow: var(--shadow-lg); }
+.spinner { width: 32px; height: 32px; border: 2.5px solid rgba(0,113,227,0.2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.75s linear infinite; margin: 0 auto 12px; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.loading-text { font-size: 14px; font-weight: 700; color: var(--text); }
+.loading-text { font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: -0.3px; }
 .loading-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
 
-/* TOAST */
-.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(60px); background: #1e293b; color: white; padding: 11px 20px; border-radius: 10px; font-size: 13px; font-weight: 500; z-index: 9999; transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1); box-shadow: 0 4px 20px rgba(0,0,0,0.2); max-width: 320px; text-align: center; }
+/* ── TOAST ── */
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(60px); background: rgba(29,29,31,0.92); backdrop-filter: blur(20px); color: white; padding: 11px 20px; border-radius: 20px; font-size: 13px; font-weight: 500; z-index: 9999; transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1); box-shadow: 0 4px 24px rgba(0,0,0,0.2); max-width: 320px; text-align: center; letter-spacing: -0.2px; }
 .toast.show { transform: translateX(-50%) translateY(0); }
 
-/* MODAL */
-.modal-bg { display: none; position: fixed; inset: 0; background: rgba(12,74,110,0.45); backdrop-filter: blur(3px); z-index: 5000; align-items: center; justify-content: center; }
+/* ── MODAL ── */
+.modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); backdrop-filter: blur(8px); z-index: 5000; align-items: center; justify-content: center; }
 .modal-bg.show { display: flex; }
-.modal { background: white; border-radius: 20px; padding: 28px; max-width: 340px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.15); animation: popIn 0.3s cubic-bezier(0.34,1.56,0.64,1); }
-@keyframes popIn { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-.modal h3 { font-size: 17px; font-weight: 900; margin-bottom: 8px; }
-.modal p { font-size: 13px; color: var(--text3); line-height: 1.65; margin-bottom: 16px; white-space: pre-line; }
-.modal-ok { width: 100%; padding: 11px; border-radius: 10px; border: none; background: var(--sky-dark); color: white; font-size: 14px; font-weight: 700; cursor: pointer; font-family: var(--font); }
+.modal { background: white; border-radius: 20px; padding: 28px; max-width: 340px; width: 90%; box-shadow: var(--shadow-lg); animation: popIn 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+@keyframes popIn { from { transform: scale(0.9) translateY(10px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+.modal h3 { font-size: 17px; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.3px; }
+.modal p { font-size: 13px; color: var(--text2); line-height: 1.65; margin-bottom: 18px; white-space: pre-line; }
+.modal-ok { width: 100%; padding: 12px; border-radius: var(--radius-sm); border: none; background: var(--accent); color: white; font-size: 15px; font-weight: 600; cursor: pointer; font-family: var(--font); letter-spacing: -0.2px; }
+
+/* ── USER LOCATION ── */
+.user-location-marker { width: 14px; height: 14px; background: var(--accent); border: 2.5px solid white; border-radius: 50%; box-shadow: 0 0 0 4px rgba(0,113,227,0.2); }
 
 @media (max-width: 768px) {
   .layout { flex-direction: column; }
@@ -199,10 +232,10 @@ header { background: linear-gradient(135deg, #0c4a6e, #0369a1); color: white; pa
 
 <header>
   <div class="brand">
+    <div class="brand-icon">☀️</div>
     <h1>Climate<span>Shelter</span></h1>
-    <span class="sub">기후피난처</span>
   </div>
-  <div class="slogan">☀️ <b>"3분 더 걸어서, 열사병에 걸리지 않을 권리"</b></div>
+  <div class="slogan">"3분 더 걸어서, 열사병에 걸리지 않을 권리"</div>
 </header>
 
 <div class="season-bar">
@@ -219,59 +252,57 @@ header { background: linear-gradient(135deg, #0c4a6e, #0369a1); color: white; pa
 
     <!-- SEARCH -->
     <div class="sec">
-      <div class="sec-title">📍 경로 검색</div>
-      <div class="search-row">
-        <span class="search-label a">A</span>
-        <div class="search-row-wrap">
-          <input class="search-input" id="inp-start" type="text" placeholder="출발지 검색" onkeydown="if(event.key==='Enter')searchPlace('start')">
-          <div class="search-dropdown" id="dd-start" style="display:none"></div>
+      <div class="sec-title">경로 검색</div>
+      <div class="search-stack">
+        <div class="search-row">
+          <span class="search-label a">A</span>
+          <div class="search-divider"></div>
+          <div class="search-row-wrap">
+            <input class="search-input" id="inp-start" type="text" placeholder="출발지" onkeydown="if(event.key==='Enter')searchPlace('start')">
+            <div class="search-dropdown" id="dd-start" style="display:none"></div>
+          </div>
+          <button class="search-btn" onclick="searchPlace('start')">검색</button>
         </div>
-        <button class="search-btn" onclick="searchPlace('start')">검색</button>
-      </div>
-      <div class="search-row">
-        <span class="search-label b">B</span>
-        <div class="search-row-wrap">
-          <input class="search-input" id="inp-end" type="text" placeholder="목적지 검색" onkeydown="if(event.key==='Enter')searchPlace('end')">
-          <div class="search-dropdown" id="dd-end" style="display:none"></div>
+        <div class="search-row">
+          <span class="search-label b">B</span>
+          <div class="search-divider"></div>
+          <div class="search-row-wrap">
+            <input class="search-input" id="inp-end" type="text" placeholder="목적지" onkeydown="if(event.key==='Enter')searchPlace('end')">
+            <div class="search-dropdown" id="dd-end" style="display:none"></div>
+          </div>
+          <button class="search-btn" onclick="searchPlace('end')">검색</button>
         </div>
-        <button class="search-btn" onclick="searchPlace('end')">검색</button>
       </div>
-      <button class="find-btn" id="find-btn" onclick="findRoute()" disabled>🛡️ ClimateShelter 경로 찾기</button>
-      <div style="font-size:10px;color:var(--text3);margin-top:6px;text-align:center;">또는 지도를 클릭해 출발지/목적지 직접 지정</div>
-      <div style="margin-top:10px;">
-        <div class="sec-title" style="margin-bottom:6px;">빠른 선택</div>
-        <button class="preset-btn" onclick="loadPreset(0,this)">🏠 연세대 정문 → 신촌역</button>
-        <button class="preset-btn" onclick="loadPreset(1,this)">👵 신촌세브란스 → 이대역</button>
-        <button class="preset-btn" onclick="loadPreset(2,this)">🏫 홍대입구역 → 홍익대</button>
-      </div>
+      <button class="find-btn" id="find-btn" onclick="findRoute()" disabled>경로 찾기</button>
+      <div class="search-hint">또는 지도에서 직접 클릭해 지정</div>
     </div>
 
 
 
-    <!-- 현재 시각 + 날씨 상태 (자동) -->
-    <div class="sec" style="padding:10px 16px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span id="time-disp" style="font-size:18px;font-weight:900;font-family:var(--mono);color:var(--sky-dark)"></span>
-          <span id="heat-chip" class="heat-chip hot">🌡️ 폭염 경보</span>
+    <!-- 현재 시각 + 날씨 -->
+    <div class="sec">
+      <div class="time-bar">
+        <div class="time-display">
+          <span id="time-disp" class="time-val"></span>
+          <span id="heat-chip" class="heat-chip hot">🌡️ 폭염</span>
         </div>
-        <div id="sun-box-inline" style="font-size:11px;color:var(--text3);">☀️ 로딩 중...</div>
+        <div id="sun-box-inline" class="weather-info">☀️ 로딩 중...</div>
       </div>
     </div>
 
     <!-- ROUTE CARDS -->
     <div class="sec">
-      <div class="sec-title">🗺️ 경로 비교 <span style="font-size:9px;font-weight:400;color:var(--text3)">카드 클릭 시 지도에서 강조</span></div>
+      <div class="sec-title">경로 비교</div>
       <div class="route-cards">
 
         <div class="r-card normal-card" id="card-normal" onclick="focusRoute('normal')">
-          <div class="r-card-click-hint">클릭해서 비교</div>
+          <div class="r-card-click-hint">탭해서 비교</div>
           <div class="r-head"><div class="r-dot n"></div><div class="r-title">일반 최단경로</div></div>
           <div class="r-stats">
-            <div><div class="st-label">소요 시간</div><div class="st-val" id="n-time">—</div></div>
-            <div><div class="st-label">거리</div><div class="st-val" id="n-dist">—</div></div>
-            <div><div class="st-label">경유 대피처</div><div class="st-val r" id="n-shelter">—</div></div>
-            <div><div class="st-label">직사광선</div><div class="st-val r" id="n-sun">—</div></div>
+            <div class="stat-block"><div class="st-label">소요 시간</div><div class="st-val" id="n-time">—</div></div>
+            <div class="stat-block"><div class="st-label">거리</div><div class="st-val" id="n-dist">—</div></div>
+            <div class="stat-block"><div class="st-label">경유 쉼터</div><div class="st-val r" id="n-shelter">—</div></div>
+            <div class="stat-block"><div class="st-label">직사광선</div><div class="st-val r" id="n-sun">—</div></div>
           </div>
           <div class="shade-wrap">
             <div class="shade-top"><span>그늘 비율</span><span id="n-spct">—</span></div>
@@ -280,16 +311,16 @@ header { background: linear-gradient(135deg, #0c4a6e, #0369a1); color: white; pa
         </div>
 
         <div class="r-card cs focused" id="card-climate" onclick="focusRoute('climate')">
-          <div class="r-card-click-hint">클릭해서 비교</div>
-          <div class="r-head"><div class="r-dot c"></div><div class="r-title" style="color:var(--sky-dark)">🛡️ ClimateShelter 추천</div></div>
+          <div class="r-card-click-hint">탭해서 비교</div>
+          <div class="r-head"><div class="r-dot c"></div><div class="r-title" style="color:var(--accent)">🛡 ClimateShelter 추천</div></div>
           <div class="r-stats">
-            <div><div class="st-label">소요 시간</div><div class="st-val" id="c-time">—</div></div>
-            <div><div class="st-label">거리</div><div class="st-val" id="c-dist">—</div></div>
-            <div><div class="st-label">경유 대피처</div><div class="st-val g" id="c-shelter">—</div></div>
-            <div><div class="st-label">직사광선</div><div class="st-val g" id="c-sun">—</div></div>
+            <div class="stat-block"><div class="st-label">소요 시간</div><div class="st-val" id="c-time">—</div></div>
+            <div class="stat-block"><div class="st-label">거리</div><div class="st-val" id="c-dist">—</div></div>
+            <div class="stat-block"><div class="st-label">경유 쉼터</div><div class="st-val g" id="c-shelter">—</div></div>
+            <div class="stat-block"><div class="st-label">직사광선</div><div class="st-val g" id="c-sun">—</div></div>
           </div>
           <div class="shade-wrap">
-            <div class="shade-top"><span>그늘 비율</span><span id="c-spct" style="color:var(--mint-dark);font-weight:700">—</span></div>
+            <div class="shade-top"><span>그늘 비율</span><span id="c-spct" style="color:var(--green-dark);font-weight:600">—</span></div>
             <div class="shade-bg"><div class="shade-fill c" id="c-sbar" style="width:0%"></div></div>
           </div>
           <div class="r-reason" id="r-reason" style="display:none"></div>
@@ -301,8 +332,8 @@ header { background: linear-gradient(135deg, #0c4a6e, #0369a1); color: white; pa
     <!-- SHELTERS -->
     <div class="sec">
       <div class="sec-title" style="display:flex;align-items:center;justify-content:space-between;">
-        <span>🏠 주변 무더위쉼터</span>
-        <span id="shelter-badge" style="font-size:9px;color:var(--text3);font-weight:400">로딩 중...</span>
+        <span>주변 무더위쉼터</span>
+        <span id="shelter-badge" style="font-size:10px;color:var(--text3);font-weight:500">로딩 중...</span>
       </div>
       <div id="shelter-list">
         <div style="font-size:12px;color:var(--text3);padding:12px 0;text-align:center;">
@@ -320,10 +351,10 @@ header { background: linear-gradient(135deg, #0c4a6e, #0369a1); color: white; pa
     <div id="map"></div>
 
     <div class="map-controls">
-      <button class="locate-btn" id="btn-locate" onclick="locateMe()">📍 내 위치</button>
-      <button class="map-ctrl-btn active" id="btn-shade" onclick="toggleShade(this)">🌳 그늘 표시</button>
-      <button class="map-ctrl-btn active" id="btn-shelter-ov" onclick="toggleShelters(this)">🏠 쉼터 표시</button>
-      <button class="map-ctrl-btn" id="btn-click" onclick="toggleClickMode(this)">📍 클릭으로 지정</button>
+      <button class="map-btn" id="btn-locate" onclick="locateMe()">📍 내 위치</button>
+      <button class="map-btn active" id="btn-shade" onclick="toggleShade(this)">🌳 그늘</button>
+      <button class="map-btn active" id="btn-shelter-ov" onclick="toggleShelters(this)">🏠 쉼터</button>
+      <button class="map-btn" id="btn-click" onclick="toggleClickMode(this)">✏️ 직접 지정</button>
     </div>
 
     <!-- 지도 위 경로 범례 -->
