@@ -44,11 +44,25 @@ _tree_cache_ready = False
 
 async def _collect_seoul_shelters():
     """
-    전국 무더위쉼터 API에서 서울 좌표 범위 데이터만 필터링해서 메모리 캐시
-    서버 시작 시 백그라운드 실행, 완료까지 약 60~90초 소요
-    1시간마다 갱신
+    1. shelters_cache.json 파일이 있으면 즉시 로딩 (Railway 배포용)
+    2. 없으면 API에서 수집 (로컬 개발용)
     """
     global _shelter_cache, _shelter_cache_ready, _shelter_cache_time
+
+    # JSON 파일에서 먼저 로딩 시도
+    import os, json as _json
+    cache_file = os.path.join(os.path.dirname(__file__), "shelters_cache.json")
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, "r", encoding="utf-8") as f:
+                data = _json.load(f)
+            _shelter_cache       = data if isinstance(data, list) else data.get("data", [])
+            _shelter_cache_ready = True
+            _shelter_cache_time  = time.time()
+            print(f"[쉼터 캐시] JSON 파일에서 로딩 완료 — {len(_shelter_cache)}개")
+            return
+        except Exception as e:
+            print(f"[쉼터 캐시] JSON 파일 로딩 실패: {e}, API로 수집 시작")
 
     print("[쉼터 캐시] 서울 무더위쉼터 수집 시작...")
     shelters = []
@@ -715,6 +729,18 @@ async def get_shadows(lat: float, lng: float, radius: float = 400, hour: float =
 @app.get("/health")
 async def health():
     return {"status": "ok", "version": "1.2.0", "shelter_cache": len(_shelter_cache), "tree_cache": len(_tree_cache)}
+
+
+@app.get("/api/export/shelters")
+async def export_shelters():
+    """캐시된 쉼터 데이터 전체 반환 (JSON 파일 생성용)"""
+    return {"count": len(_shelter_cache), "data": _shelter_cache}
+
+
+@app.get("/api/export/trees")
+async def export_trees():
+    """캐시된 가로수 데이터 전체 반환 (JSON 파일 생성용)"""
+    return {"count": len(_tree_cache), "data": _tree_cache}
 
 
 # =============================================================================
