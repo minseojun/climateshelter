@@ -320,6 +320,7 @@ header { background: linear-gradient(135deg, #0c4a6e, #0369a1); color: white; pa
     <div id="map"></div>
 
     <div class="map-controls">
+      <button class="locate-btn" id="btn-locate" onclick="locateMe()">📍 내 위치</button>
       <button class="map-ctrl-btn active" id="btn-shade" onclick="toggleShade(this)">🌳 그늘 표시</button>
       <button class="map-ctrl-btn active" id="btn-shelter-ov" onclick="toggleShelters(this)">🏠 쉼터 표시</button>
       <button class="map-ctrl-btn" id="btn-click" onclick="toggleClickMode(this)">📍 클릭으로 지정</button>
@@ -904,6 +905,81 @@ function toggleClickMode(btn) {
   btn.classList.toggle('active', state.clickMode);
   map.getContainer().style.cursor = state.clickMode ? 'crosshair' : '';
   toast(state.clickMode ? '📍 클릭 모드 ON — 출발지(A)를 클릭하세요' : '클릭 모드 OFF');
+}
+
+// 현재 위치 마커
+let locationMarker = null;
+let locationCircle = null;
+
+function locateMe() {
+  const btn = document.getElementById('btn-locate');
+  if (!navigator.geolocation) {
+    toast('❌ 이 브라우저는 위치 서비스를 지원하지 않습니다.');
+    return;
+  }
+
+  btn.classList.add('locating');
+  btn.textContent = '📍 위치 찾는 중...';
+  toast('📍 현재 위치를 찾는 중...');
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      const acc = pos.coords.accuracy;
+
+      // 기존 위치 마커 제거
+      if (locationMarker) map.removeLayer(locationMarker);
+      if (locationCircle) map.removeLayer(locationCircle);
+
+      // 정확도 원 표시
+      locationCircle = L.circle([lat, lng], {
+        radius: acc,
+        color: '#2563eb',
+        fillColor: '#2563eb',
+        fillOpacity: 0.08,
+        weight: 1,
+      }).addTo(map);
+
+      // 현재 위치 마커
+      const icon = L.divIcon({
+        html: '<div class="user-location-marker"></div>',
+        className: '',
+        iconSize: [16, 16],
+        iconAnchor: [8, 8],
+      });
+      locationMarker = L.marker([lat, lng], { icon })
+        .bindPopup('<b>📍 현재 위치</b>')
+        .addTo(map);
+
+      map.setView([lat, lng], 16);
+
+      btn.classList.remove('locating');
+      btn.textContent = '📍 내 위치';
+      toast('✅ 현재 위치를 찾았습니다!');
+
+      // 출발지로 설정할지 물어보기 (클릭 모드가 아닐 때)
+      if (!state.startLatLng) {
+        setTimeout(() => {
+          if (confirm('현재 위치를 출발지(A)로 설정할까요?')) {
+            setStart(lat, lng, '현재 위치');
+            toast('📍 현재 위치가 출발지로 설정됐습니다.');
+          }
+        }, 500);
+      }
+    },
+    (err) => {
+      btn.classList.remove('locating');
+      btn.textContent = '📍 내 위치';
+      const msg = {
+        1: '위치 권한이 거부됐습니다. 브라우저 설정에서 허용해주세요.',
+        2: '위치를 찾을 수 없습니다.',
+        3: '위치 요청 시간이 초과됐습니다.',
+      }[err.code] || '위치를 가져올 수 없습니다.';
+      toast('❌ ' + msg);
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+  );
 }
 
 function updateCurrentTime() {
