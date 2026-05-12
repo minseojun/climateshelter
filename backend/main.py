@@ -200,6 +200,8 @@ class RouteResponse(BaseModel):
     shelters_nearby: list
     weather: dict
     reason: str
+    heat_risk: dict = {}
+    ai_powered: bool = False
 
 
 # =============================================================================
@@ -448,46 +450,99 @@ def get_sun_elevation(hour: float) -> float:
 #  5. Claude API — 경로 추천 이유 생성
 # =============================================================================
 
-async def get_ai_reason(normal: dict, climate: dict, weather: dict, heat_mode: str) -> str:
+def calc_heat_risk(temp: float, uv: float, shade_score: float, hour: int) -> dict:
     """
-    Claude API로 경로 추천 이유 자연어 생성
+    열사병 위험도 계산 (AI 판단 보조용)
+    기온 + 자외선 + 그늘 비율 + 시간대 조합
+    """
+    # 기온 점수 (0~40)
+    temp_score = max(0, (temp - 20) * 2)
+    # 자외선 점수 (0~30)
+    uv_score = min(30, uv * 3)
+    # 그늘 없을수록 위험 (0~20)
+    shade_score_risk = (1 - shade_score) * 20
+    # 오후 12~16시 가중치
+    time_score = 10 if 12 <= hour <= 16 else 5 if 10 <= hour <= 18 else 0
+
+    total = temp_score + uv_score + shade_score_risk + time_score
+
+    if total >= 70:
+        return {"level": "매우위험", "color": "red",    "emoji": "🚨"}
+    elif total >= 50:
+        return {"level": "위험",    "color": "orange",  "emoji": "⚠️"}
+    elif total >= 30:
+        return {"level": "주의",    "color": "yellow",  "emoji": "☀️"}
+    else:
+        return {"level": "안전",    "color": "green",   "emoji": "✅"}
+
+
+async def get_ai_reason(normal: dict, climate: dict, weather: dict, heat_mode: str) -> dict:
+    """
+    Claude API로 경로 추천 이유 + 열사병 위험도 생성
     ANTHROPIC_API_KEY 없으면 템플릿 기반 폴백
+    반환: {reason: str, heat_risk: dict, ai_powered: bool}
     """
+    temp     = weather.get("temp", 30) if isinstance(weather.get("temp"), (int, float)) else weather.get("temp", {}).get("temp", 30) if isinstance(weather.get("temp"), dict) else 30
+    uv       = weather.get("uv_index", 5)
+    feels    = weather.get("feels_like", temp)
+    hour_now = datetime.now().hour
+
+    shade_diff  = round((climate["shade_score"] - normal["shade_score"]) * 100)
+    time_diff   = climate.get("duration_min", round(climate["duration"]/60)) - normal.get("duration_min", round(normal["duration"]/60))
+    n_min       = normal.get("duration_min", round(normal["duration"]/60))
+    c_min       = climate.get("duration_min", round(climate["duration"]/60))
+    shelters    = climate.get("shelter_count", 0)
+    n_sun       = normal.get("sun_exposure_min", round(n_min * (1 - normal["shade_score"]), 1))
+    c_sun       = climate.get("sun_exposure_min", round(c_min * (1 - climate["shade_score"]), 1))
+
+    # 열사병 위험도
+    normal_risk  = calc_heat_risk(temp, uv, normal["shade_score"],  hour_now)
+    climate_risk = calc_heat_risk(temp, uv, climate["shade_score"], hour_now)
+
     if not ANTHROPIC_KEY:
-        return get_template_reason(normal, climate, weather, heat_mode)
+        return {
+            "reason":       get_template_reason(normal, climate, weather, heat_mode),
+            "heat_risk":    {"normal": normal_risk, "climate": climate_risk},
+            "ai_powered":   False,
+        }
 
     try:
         import anthropic
         client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_KEY)
 
-        shade_diff = round((climate["shade_score"] - normal["shade_score"]) * 100)
-        time_diff  = climate.get("duration_min", round(climate["duration"]/60)) - normal.get("duration_min", round(normal["duration"]/60))
-        temp       = weather.get("temp", {}).get("temp", 30) if isinstance(weather.get("temp"), dict) else 30
+        prompt = f"""당신은 폭염 보행 안전 내비게이션 ClimateShelter의 AI 분석가입니다.
+아래 실시간 환경 데이터를 분석하여 추천 경로 선택 이유를 한국어 2문장 이내로 작성하세요.
+수치를 구체적으로 언급하고, 이모지 1개로 시작하세요.
 
-        prompt = f"""
-당신은 폭염 보행 안전 내비게이션 앱의 경로 추천 설명을 작성합니다.
-한국어로 2문장 이내, 핵심 수치 포함, 따뜻하고 실용적인 톤으로 작성해주세요.
+[현재 환경]
+- 기온: {temp}°C (체감 {feels}°C), 자외선지수: {uv}
+- 시각: {hour_now}시, 열사병 위험도(일반경로): {normal_risk["level"]}
 
-현재 상황:
-- 현재 기온: {temp}°C
-- 사용자 열체감: {"더워요 (열에 민감)" if heat_mode == "hot" else "괜찮아요 (일반)"}
-- 일반 경로: {round(normal["distance"])}m, {normal.get("duration_min", round(normal["duration"]/60))}분, 그늘 {round(normal["shade_score"]*100)}%
-- 추천 경로: {round(climate["distance"])}m, {climate.get("duration_min", round(climate["duration"]/60))}분, 그늘 {round(climate["shade_score"]*100)}%, 쉼터 {climate["shelter_count"]}개 경유
-- 추가 소요 시간: {time_diff}분, 그늘 증가: +{shade_diff}%
+[경로 비교]
+- 일반경로: {round(normal["distance"])}m / {n_min}분 / 그늘 {round(normal["shade_score"]*100)}% / 직사광선 {n_sun}분
+- 추천경로: {round(climate["distance"])}m / {c_min}분 / 그늘 {round(climate["shade_score"]*100)}% / 직사광선 {c_sun}분 / 쉼터 {shelters}개
+- 시간 추가: +{time_diff}분, 그늘 증가: +{shade_diff}%, 직사광선 감소: {round(n_sun - c_sun, 1)}분"""
 
-위 데이터를 바탕으로 ClimateShelter 추천 경로를 선택해야 하는 이유를 설명해주세요.
-이모지 1개로 시작하세요.
-"""
         msg = await client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=150,
+            max_tokens=200,
             messages=[{"role": "user", "content": prompt}]
         )
-        return msg.content[0].text.strip()
+        reason = msg.content[0].text.strip()
+        print(f"[Claude API] 경로 설명 생성 완료")
+        return {
+            "reason":     reason,
+            "heat_risk":  {"normal": normal_risk, "climate": climate_risk},
+            "ai_powered": True,
+        }
 
     except Exception as e:
         print(f"[Claude API 오류] {e}")
-        return get_template_reason(normal, climate, weather, heat_mode)
+        return {
+            "reason":     get_template_reason(normal, climate, weather, heat_mode),
+            "heat_risk":  {"normal": normal_risk, "climate": climate_risk},
+            "ai_powered": False,
+        }
 
 
 def get_template_reason(normal, climate, weather, heat_mode) -> str:
@@ -676,14 +731,16 @@ async def get_route(req: RouteRequest):
         "uv_index":   weather.get("uv_index", 5),
     }
 
-    reason = await get_ai_reason(normal_data, climate_data, weather_data, req.heat_mode)
+    ai_result = await get_ai_reason(normal_data, climate_data, weather_data, req.heat_mode)
 
     return RouteResponse(
         normal=normal_data,
         climate=climate_data,
         shelters_nearby=actual_shelters,
         weather=weather_data,
-        reason=reason,
+        reason=ai_result["reason"],
+        heat_risk=ai_result.get("heat_risk", {}),
+        ai_powered=ai_result.get("ai_powered", False),
     )
 
 
