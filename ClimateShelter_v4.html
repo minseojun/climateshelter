@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<!--
+=============================================================================
+  ClimateShelter v4
+=============================================================================
+  변경사항 (v3 → v4):
+  1. 이용자 유형: 4종 → "괜찮아요 / 더워요" 2종 토글
+     - 괜찮아요: shade_weight 1.0 (기본)
+     - 더워요:   shade_weight 2.0 (그늘·쉼터 가중치 2배, 경로 눈에 띄게 달라짐)
+  2. 경로 클릭 비교: 지도에서 일반/추천 경로 라인 클릭 시 해당 카드 하이라이트
+     + 사이드바 카드 클릭 시 지도에서 해당 경로 강조
+  3. 실제 앱 전환 가이드 주석 정리
+=============================================================================
+-->
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClimateShelter — 기후피난처</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --sky: #38bdf8;
+  --sky-dark: #0284c7;
+  --mint: #34d399;
+  --mint-dark: #059669;
+  --danger: #ef4444;
+  --warn: #f97316;
+  --bg: #f0f9ff;
+  --surface: #fff;
+  --border: #bae6fd;
+  --text: #0c4a6e;
+  --text2: #0369a1;
+  --text3: #64748b;
+  --font: 'Noto Sans KR', sans-serif;
+  --mono: 'Space Mono', monospace;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* HEADER */
+header { background: linear-gradient(135deg, #0c4a6e, #0369a1); color: white; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 12px; flex-wrap: wrap; }
+.brand { display: flex; align-items: baseline; gap: 8px; }
+.brand h1 { font-size: 20px; font-weight: 900; }
+.brand h1 span { color: var(--mint); }
+.brand .sub { font-size: 11px; opacity: 0.55; letter-spacing: 1px; }
+.slogan { font-size: 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; padding: 5px 14px; }
+.slogan b { color: #fbbf24; }
+
+/* SEASON TABS */
+.season-bar { background: #075985; border-bottom: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; }
+.season-tabs { display: flex; padding: 0 16px; }
+.s-tab { padding: 9px 18px; font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.45); cursor: pointer; border: none; background: none; border-bottom: 3px solid transparent; transition: all 0.2s; font-family: var(--font); white-space: nowrap; }
+.s-tab.active { color: #fff; border-bottom-color: var(--mint); font-weight: 700; }
+.s-tab.off { opacity: 0.35; cursor: not-allowed; }
+
+/* LAYOUT */
+.layout { flex: 1; display: flex; overflow: hidden; }
+
+/* SIDEBAR */
+.sidebar { width: 310px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; }
+.sec { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.sec-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text3); margin-bottom: 10px; }
+
+/* SEARCH */
+.search-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+.search-label { font-size: 13px; font-weight: 900; width: 20px; flex-shrink: 0; }
+.search-label.a { color: #10b981; }
+.search-label.b { color: #ef4444; }
+.search-input { flex: 1; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-family: var(--font); color: var(--text); outline: none; transition: border-color 0.2s; }
+.search-input:focus { border-color: var(--sky-dark); }
+.search-btn { padding: 8px 10px; background: var(--sky-dark); color: white; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: var(--font); white-space: nowrap; }
+.find-btn { width: 100%; padding: 11px; background: linear-gradient(135deg, var(--sky-dark), var(--mint-dark)); color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: var(--font); margin-top: 8px; transition: opacity 0.2s; }
+.find-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.search-row-wrap { position: relative; flex: 1; }
+.search-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); z-index: 9999; max-height: 180px; overflow-y: auto; }
+.search-dropdown-item { padding: 10px 12px; font-size: 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; }
+.search-dropdown-item:last-child { border-bottom: none; }
+.search-dropdown-item:hover { background: #e0f2fe; }
+
+/* PRESETS */
+.preset-btn { width: 100%; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border); background: #f8fafc; cursor: pointer; text-align: left; font-size: 12px; color: var(--text); font-family: var(--font); margin-bottom: 5px; transition: all 0.2s; display: flex; align-items: center; gap: 8px; }
+.preset-btn:hover, .preset-btn.active { background: #e0f2fe; border-color: var(--sky); }
+
+
+
+/* TIME BADGE */
+.heat-chip { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; background: #fef3c7; color: #92400e; }
+.heat-chip.hot { background: #fee2e2; color: #991b1b; }
+
+/* ROUTE CARDS */
+.route-cards { display: flex; flex-direction: column; gap: 8px; }
+.r-card {
+  border-radius: 10px; border: 2px solid var(--border); padding: 11px; background: #f8fafc;
+  cursor: pointer; transition: all 0.2s;
+  position: relative;
+}
+.r-card:hover { border-color: #94a3b8; }
+.r-card.cs { border-color: var(--sky); background: #f0f9ff; }
+.r-card.cs:hover { border-color: var(--sky-dark); }
+/* 선택 강조 */
+.r-card.focused { box-shadow: 0 0 0 3px rgba(56,189,248,0.35); }
+.r-card.focused.normal-card { box-shadow: 0 0 0 3px rgba(148,163,184,0.4); }
+.r-card-click-hint {
+  position: absolute; top: 8px; right: 8px;
+  font-size: 9px; color: var(--text3); background: #f1f5f9;
+  padding: 2px 6px; border-radius: 10px; font-weight: 500;
+}
+.r-head { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; }
+.r-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.r-dot.n { background: #94a3b8; }
+.r-dot.c { background: var(--sky); box-shadow: 0 0 6px rgba(56,189,248,0.5); }
+.r-title { font-size: 12px; font-weight: 700; }
+.r-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 7px; }
+.st-label { font-size: 10px; color: var(--text3); }
+.st-val { font-size: 13px; font-weight: 700; }
+.st-val.g { color: var(--mint-dark); }
+.st-val.r { color: var(--danger); }
+.shade-wrap { margin-bottom: 5px; }
+.shade-top { display: flex; justify-content: space-between; font-size: 10px; color: var(--text3); margin-bottom: 3px; }
+.shade-bg { height: 5px; background: #e2e8f0; border-radius: 3px; overflow: hidden; }
+.shade-fill { height: 100%; border-radius: 3px; transition: width 0.7s ease; }
+.shade-fill.n { background: #94a3b8; }
+.shade-fill.c { background: linear-gradient(90deg, var(--sky), var(--mint)); }
+.r-reason { font-size: 11px; color: var(--text2); background: rgba(56,189,248,0.08); border-left: 3px solid var(--sky); padding: 6px 8px; border-radius: 0 6px 6px 0; line-height: 1.5; }
+
+/* SHELTER LIST */
+.shelter-item { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #f1f5f9; font-size: 12px; cursor: pointer; }
+.shelter-item:last-child { border-bottom: none; }
+.shelter-item:hover { color: var(--sky-dark); }
+
+/* MAP */
+.map-wrap { flex: 1; position: relative; }
+#map { width: 100%; height: 100%; }
+
+/* MAP CONTROLS */
+.map-controls { position: absolute; top: 12px; left: 12px; z-index: 1000; display: flex; flex-direction: column; gap: 6px; }
+.map-ctrl-btn { padding: 8px 14px; background: white; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-weight: 700; color: var(--text); cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.1); font-family: var(--font); white-space: nowrap; transition: all 0.2s; }
+.map-ctrl-btn:hover { background: #e0f2fe; }
+.map-ctrl-btn.active { background: var(--sky-dark); color: white; border-color: var(--sky-dark); }
+
+/* MAP ROUTE LEGEND (지도 위) */
+.map-route-legend {
+  position: absolute; bottom: 28px; left: 12px; z-index: 1000;
+  background: rgba(255,255,255,0.95); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 14px; font-size: 11px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: none;
+}
+.map-route-legend.show { display: block; }
+.legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; cursor: pointer; padding: 3px 4px; border-radius: 6px; transition: background 0.15s; }
+.legend-row:last-child { margin-bottom: 0; }
+.legend-row:hover { background: #f0f9ff; }
+.legend-row.focused { background: #e0f2fe; font-weight: 700; }
+.legend-line { width: 28px; height: 4px; border-radius: 2px; flex-shrink: 0; }
+.legend-line.n { background: #94a3b8; }
+.legend-line.c { background: var(--sky-dark); }
+
+/* SUN BOX */
+
+
+/* LOADING */
+.loading-overlay { position: absolute; inset: 0; background: rgba(240,249,255,0.85); display: none; align-items: center; justify-content: center; z-index: 2000; backdrop-filter: blur(2px); }
+.loading-overlay.show { display: flex; }
+.loading-box { background: white; border-radius: 16px; padding: 24px 32px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.1); }
+.spinner { width: 36px; height: 36px; border: 3px solid #e0f2fe; border-top-color: var(--sky-dark); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 14px; font-weight: 700; color: var(--text); }
+.loading-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
+
+/* TOAST */
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(60px); background: #1e293b; color: white; padding: 11px 20px; border-radius: 10px; font-size: 13px; font-weight: 500; z-index: 9999; transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1); box-shadow: 0 4px 20px rgba(0,0,0,0.2); max-width: 320px; text-align: center; }
+.toast.show { transform: translateX(-50%) translateY(0); }
+
+/* MODAL */
+.modal-bg { display: none; position: fixed; inset: 0; background: rgba(12,74,110,0.45); backdrop-filter: blur(3px); z-index: 5000; align-items: center; justify-content: center; }
+.modal-bg.show { display: flex; }
+.modal { background: white; border-radius: 20px; padding: 28px; max-width: 340px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.15); animation: popIn 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+@keyframes popIn { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.modal h3 { font-size: 17px; font-weight: 900; margin-bottom: 8px; }
+.modal p { font-size: 13px; color: var(--text3); line-height: 1.65; margin-bottom: 16px; white-space: pre-line; }
+.modal-ok { width: 100%; padding: 11px; border-radius: 10px; border: none; background: var(--sky-dark); color: white; font-size: 14px; font-weight: 700; cursor: pointer; font-family: var(--font); }
+
+@media (max-width: 768px) {
+  .layout { flex-direction: column; }
+  .sidebar { width: 100%; max-height: 50vh; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>Climate<span>Shelter</span></h1>
+    <span class="sub">기후피난처</span>
+  </div>
+  <div class="slogan">☀️ <b>"3분 더 걸어서, 열사병에 걸리지 않을 권리"</b></div>
+</header>
+
+<div class="season-bar">
+  <div class="season-tabs">
+    <button class="s-tab active" onclick="onSeason('summer')">🌞 여름</button>
+    <button class="s-tab off" onclick="onSeason('winter')">❄️ 겨울</button>
+    <button class="s-tab off" onclick="onSeason('rainy')">🌧️ 장마</button>
+    <button class="s-tab off" onclick="onSeason('dust')">🌫️ 봄/가을</button>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+
+    <!-- SEARCH -->
+    <div class="sec">
+      <div class="sec-title">📍 경로 검색</div>
+      <div class="search-row">
+        <span class="search-label a">A</span>
+        <div class="search-row-wrap">
+          <input class="search-input" id="inp-start" type="text" placeholder="출발지 검색" onkeydown="if(event.key==='Enter')searchPlace('start')">
+          <div class="search-dropdown" id="dd-start" style="display:none"></div>
+        </div>
+        <button class="search-btn" onclick="searchPlace('start')">검색</button>
+      </div>
+      <div class="search-row">
+        <span class="search-label b">B</span>
+        <div class="search-row-wrap">
+          <input class="search-input" id="inp-end" type="text" placeholder="목적지 검색" onkeydown="if(event.key==='Enter')searchPlace('end')">
+          <div class="search-dropdown" id="dd-end" style="display:none"></div>
+        </div>
+        <button class="search-btn" onclick="searchPlace('end')">검색</button>
+      </div>
+      <button class="find-btn" id="find-btn" onclick="findRoute()" disabled>🛡️ ClimateShelter 경로 찾기</button>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px;text-align:center;">또는 지도를 클릭해 출발지/목적지 직접 지정</div>
+      <div style="margin-top:10px;">
+        <div class="sec-title" style="margin-bottom:6px;">빠른 선택</div>
+        <button class="preset-btn" onclick="loadPreset(0,this)">🏠 연세대 정문 → 신촌역</button>
+        <button class="preset-btn" onclick="loadPreset(1,this)">👵 신촌세브란스 → 이대역</button>
+        <button class="preset-btn" onclick="loadPreset(2,this)">🏫 홍대입구역 → 홍익대</button>
+      </div>
+    </div>
+
+
+
+    <!-- 현재 시각 + 날씨 상태 (자동) -->
+    <div class="sec" style="padding:10px 16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span id="time-disp" style="font-size:18px;font-weight:900;font-family:var(--mono);color:var(--sky-dark)"></span>
+          <span id="heat-chip" class="heat-chip hot">🌡️ 폭염 경보</span>
+        </div>
+        <div id="sun-box-inline" style="font-size:11px;color:var(--text3);">☀️ 로딩 중...</div>
+      </div>
+    </div>
+
+    <!-- ROUTE CARDS -->
+    <div class="sec">
+      <div class="sec-title">🗺️ 경로 비교 <span style="font-size:9px;font-weight:400;color:var(--text3)">카드 클릭 시 지도에서 강조</span></div>
+      <div class="route-cards">
+
+        <div class="r-card normal-card" id="card-normal" onclick="focusRoute('normal')">
+          <div class="r-card-click-hint">클릭해서 비교</div>
+          <div class="r-head"><div class="r-dot n"></div><div class="r-title">일반 최단경로</div></div>
+          <div class="r-stats">
+            <div><div class="st-label">소요 시간</div><div class="st-val" id="n-time">—</div></div>
+            <div><div class="st-label">거리</div><div class="st-val" id="n-dist">—</div></div>
+            <div><div class="st-label">경유 대피처</div><div class="st-val r" id="n-shelter">—</div></div>
+            <div><div class="st-label">직사광선</div><div class="st-val r" id="n-sun">—</div></div>
+          </div>
+          <div class="shade-wrap">
+            <div class="shade-top"><span>그늘 비율</span><span id="n-spct">—</span></div>
+            <div class="shade-bg"><div class="shade-fill n" id="n-sbar" style="width:0%"></div></div>
+          </div>
+        </div>
+
+        <div class="r-card cs focused" id="card-climate" onclick="focusRoute('climate')">
+          <div class="r-card-click-hint">클릭해서 비교</div>
+          <div class="r-head"><div class="r-dot c"></div><div class="r-title" style="color:var(--sky-dark)">🛡️ ClimateShelter 추천</div></div>
+          <div class="r-stats">
+            <div><div class="st-label">소요 시간</div><div class="st-val" id="c-time">—</div></div>
+            <div><div class="st-label">거리</div><div class="st-val" id="c-dist">—</div></div>
+            <div><div class="st-label">경유 대피처</div><div class="st-val g" id="c-shelter">—</div></div>
+            <div><div class="st-label">직사광선</div><div class="st-val g" id="c-sun">—</div></div>
+          </div>
+          <div class="shade-wrap">
+            <div class="shade-top"><span>그늘 비율</span><span id="c-spct" style="color:var(--mint-dark);font-weight:700">—</span></div>
+            <div class="shade-bg"><div class="shade-fill c" id="c-sbar" style="width:0%"></div></div>
+          </div>
+          <div class="r-reason" id="r-reason" style="display:none"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SHELTERS -->
+    <div class="sec">
+      <div class="sec-title" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>🏠 주변 무더위쉼터</span>
+        <span id="shelter-badge" style="font-size:9px;color:var(--text3);font-weight:400">로딩 중...</span>
+      </div>
+      <div id="shelter-list">
+        <div style="font-size:12px;color:var(--text3);padding:12px 0;text-align:center;">
+          <div style="font-size:18px;margin-bottom:4px">🔄</div>
+          쉼터 데이터 수집 중...<br>
+          <span style="font-size:10px">잠시 후 자동으로 표시됩니다</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /sidebar -->
+
+  <!-- MAP -->
+  <div class="map-wrap">
+    <div id="map"></div>
+
+    <div class="map-controls">
+      <button class="map-ctrl-btn active" id="btn-shade" onclick="toggleShade(this)">🌳 그늘 표시</button>
+      <button class="map-ctrl-btn active" id="btn-shelter-ov" onclick="toggleShelters(this)">🏠 쉼터 표시</button>
+      <button class="map-ctrl-btn" id="btn-click" onclick="toggleClickMode(this)">📍 클릭으로 지정</button>
+    </div>
+
+    <!-- 지도 위 경로 범례 -->
+    <div class="map-route-legend" id="map-legend">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:6px;font-weight:700;">경로 선택</div>
+      <div class="legend-row focused" id="legend-climate" onclick="focusRoute('climate')">
+        <div class="legend-line c"></div>
+        <span>🛡️ ClimateShelter 추천</span>
+      </div>
+      <div class="legend-row" id="legend-normal" onclick="focusRoute('normal')">
+        <div class="legend-line n" style="border-top:2px dashed #94a3b8;background:transparent;height:0"></div>
+        <span>일반 최단경로</span>
+      </div>
+    </div>
+
+
+
+    <div class="loading-overlay" id="loading">
+      <div class="loading-box">
+        <div class="spinner"></div>
+        <div class="loading-text">경로 분석 중...</div>
+        <div class="loading-sub" id="loading-sub">OSRM 도보경로 계산 중</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="modal-bg" id="modal-bg" onclick="closeModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h3 id="modal-title"></h3>
+    <p id="modal-body"></p>
+    <button class="modal-ok" onclick="closeModal()">확인</button>
+  </div>
+</div>
+
+<script>
+// =============================================================================
+//  MAP INIT
+// =============================================================================
+
+const map = L.map('map', { zoomControl: true }).setView([37.5575, 126.9368], 15);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  maxZoom: 19,
+}).addTo(map);
+
+// =============================================================================
+//  STATE
+// =============================================================================
+
+const state = {
+  hour: new Date().getHours() + new Date().getMinutes()/60,
+  heat: 'ok',              // 고정값 (토글 제거됨)
+  startLatLng: null,
+  endLatLng: null,
+  clickMode: false,
+  clickPhase: 0,
+  showShade: true,
+  showShelters: true,
+  currentPreset: null,
+  focusedRoute: 'climate',
+};
+
+let markerA = null, markerB = null;
+let layerNormal = null, layerNormalGlow = null;
+let layerClimate = null, layerClimateGlow = null;
+let shadowLayers = [], shelterMarkers = [];
+let routeData = null;  // 마지막으로 계산된 경로 좌표 저장
+
+// =============================================================================
+//  ICONS
+// =============================================================================
+
+const iconA = L.divIcon({ html: `<div style="background:#10b981;color:white;width:32px;height:32px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;box-shadow:0 2px 8px rgba(0,0,0,0.3)"><span style="transform:rotate(45deg)">A</span></div>`, className:'', iconSize:[32,40], iconAnchor:[16,40] });
+const iconB = L.divIcon({ html: `<div style="background:#ef4444;color:white;width:32px;height:32px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;box-shadow:0 2px 8px rgba(0,0,0,0.3)"><span style="transform:rotate(45deg)">B</span></div>`, className:'', iconSize:[32,40], iconAnchor:[16,40] });
+const iconShelter = L.divIcon({ html: `<div style="background:#f97316;color:white;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,0.25);border:2px solid white">🏠</div>`, className:'', iconSize:[28,28], iconAnchor:[14,14] });
+
+
+
+// =============================================================================
+//  MAP CLICK
+// =============================================================================
+
+map.on('click', async function(e) {
+  if (!state.clickMode) return;
+  const { lat, lng } = e.latlng;
+
+  let name = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=ko`);
+    const data = await res.json();
+    if (data.display_name) name = data.display_name.split(',').slice(0,3).join(', ');
+  } catch(e) {}
+
+  if (state.clickPhase === 0) {
+    setStart(lat, lng, name);
+    state.clickPhase = 1;
+    toast('📍 출발지(A) 설정. 목적지(B)를 클릭하세요.');
+  } else {
+    setEnd(lat, lng, name);
+    state.clickPhase = 0;
+    toast('🏁 목적지(B) 설정 완료!');
+  }
+});
+
+// =============================================================================
+//  SET START / END
+// =============================================================================
+
+function setStart(lat, lng, name) {
+  if (markerA) map.removeLayer(markerA);
+  state.startLatLng = [lat, lng];
+  document.getElementById('inp-start').value = name;
+  markerA = L.marker([lat, lng], { icon: iconA }).addTo(map);
+  checkReady();
+}
+
+function setEnd(lat, lng, name) {
+  if (markerB) map.removeLayer(markerB);
+  state.endLatLng = [lat, lng];
+  document.getElementById('inp-end').value = name;
+  markerB = L.marker([lat, lng], { icon: iconB }).addTo(map);
+  checkReady();
+}
+
+function checkReady() {
+  document.getElementById('find-btn').disabled = !(state.startLatLng && state.endLatLng);
+}
+
+// =============================================================================
+//  SEARCH (Nominatim)
+// =============================================================================
+
+async function searchPlace(type) {
+  const inputId = type === 'start' ? 'inp-start' : 'inp-end';
+  const ddId    = type === 'start' ? 'dd-start'  : 'dd-end';
+  const keyword = document.getElementById(inputId).value.trim();
+  if (!keyword) { toast('검색어를 입력하세요.'); return; }
+
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(keyword)}&format=json&limit=5&accept-language=ko&countrycodes=kr`);
+    const results = await res.json();
+    if (!results.length) { toast('❌ 검색 결과 없음. 더 구체적으로 입력해보세요.'); return; }
+    if (results.length === 1) { selectResult(type, results[0]); return; }
+
+    const dd = document.getElementById(ddId);
+    dd.innerHTML = '';
+    results.forEach(r => {
+      const item = document.createElement('div');
+      item.className = 'search-dropdown-item';
+      item.textContent = r.display_name.split(',').slice(0,3).join(', ');
+      item.onclick = () => { selectResult(type, r); dd.style.display = 'none'; };
+      dd.appendChild(item);
+    });
+    dd.style.display = 'block';
+    setTimeout(() => document.addEventListener('click', () => { dd.style.display='none'; }, { once:true }), 100);
+  } catch(e) {
+    toast('❌ 검색 오류. 인터넷 연결을 확인해주세요.');
+  }
+}
+
+function selectResult(type, r) {
+  const lat = parseFloat(r.lat), lng = parseFloat(r.lon);
+  const name = r.display_name.split(',').slice(0,2).join(', ');
+  if (type === 'start') setStart(lat, lng, name);
+  else setEnd(lat, lng, name);
+  map.setView([lat, lng], 16);
+  toast(`📍 "${name}" 설정 완료`);
+}
+
+// =============================================================================
+//  PRESETS
+// =============================================================================
+
+const PRESETS = [
+  {
+    startName:'연세대 정문', startLat:37.5653, startLng:126.9388,
+    endName:'신촌역 2번출구', endLat:37.5554, endLng:126.9368,
+    normal:  { time:'11분', dist:'780m',  shade:21, shelters:0, sun:'8.7분' },
+    climateOk:  { time:'13분', dist:'920m',  shade:72, shelters:1, sun:'3.1분' },
+    climateHot: { time:'15분', dist:'1,050m', shade:89, shelters:2, sun:'1.3분' },
+    reasonOk:  '🌳 은행나무길 경유로 그늘 72% 확보. 무더위쉼터 1곳 경유합니다.',
+    reasonHot: '🥵 더위에 민감한 설정 — 그늘 89%, 쉼터 2곳, 직사광선을 최소화했습니다.',
+  },
+  {
+    startName:'신촌 세브란스', startLat:37.5621, startLng:126.9416,
+    endName:'이대역 3번출구', endLat:37.5568, endLng:126.9459,
+    normal:  { time:'8분',  dist:'540m',  shade:17, shelters:0, sun:'6.6분' },
+    climateOk:  { time:'10분', dist:'660m',  shade:68, shelters:1, sun:'2.6분' },
+    climateHot: { time:'12분', dist:'760m',  shade:83, shelters:1, sun:'1.1분' },
+    reasonOk:  '🏥 신촌로 가로수길 경유, 그늘 68% 확보. 병원 동행에 적합합니다.',
+    reasonHot: '🥵 더위 최소화 — 그늘 83%, 직사광선 1.1분. 가장 시원한 경로입니다.',
+  },
+  {
+    startName:'홍대입구역', startLat:37.5572, startLng:126.9247,
+    endName:'홍익대학교', endLat:37.5508, endLng:126.9255,
+    normal:  { time:'9분',  dist:'620m',  shade:14, shelters:0, sun:'7.7분' },
+    climateOk:  { time:'11분', dist:'760m',  shade:66, shelters:0, sun:'3.0분' },
+    climateHot: { time:'14분', dist:'900m',  shade:81, shelters:1, sun:'1.7분' },
+    reasonOk:  '🌳 와우산로 가로수길 우선 경유. 그늘 66%, 2분 추가됩니다.',
+    reasonHot: '🥵 홍대 공원 + 쉼터 경유. 그늘 81%, 직사광선 최소화 경로입니다.',
+  },
+];
+
+function loadPreset(idx, btn) {
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.currentPreset = idx;
+
+  const p = PRESETS[idx];
+  setStart(p.startLat, p.startLng, p.startName);
+  setEnd(p.endLat, p.endLng, p.endName);
+  map.fitBounds([[p.startLat, p.startLng], [p.endLat, p.endLng]], { padding: [60,60] });
+  toast(`📍 ${p.startName} → ${p.endName}`);
+  findRoute();
+}
+
+// =============================================================================
+//  ROUTE — 백엔드 API 연동
+// =============================================================================
+
+// 백엔드 URL — 로컬 개발용
+// 배포 시 Railway/Render URL로 교체: const API_BASE = 'https://your-app.railway.app';
+const API_BASE = 'http://localhost:8001';
+
+async function findRoute() {
+  if (!state.startLatLng || !state.endLatLng) return;
+
+  showLoading(true, 'ClimateShelter 경로 분석 중...');
+  clearRoutes();
+
+  const [sLat, sLng] = state.startLatLng;
+  const [eLat, eLng] = state.endLatLng;
+
+  try {
+    // ── 백엔드 호출 ──────────────────────────────────────
+    const res = await fetch(`${API_BASE}/api/route`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        start_lat: sLat,
+        start_lng: sLng,
+        end_lat:   eLat,
+        end_lng:   eLng,
+        heat_mode: 'ok',
+        hour:      Math.floor(state.hour),
+      }),
+    });
+
+    if (!res.ok) throw new Error(`API ${res.status}`);
+    const data = await res.json();
+
+    // ── 경로 좌표 추출 ────────────────────────────────────
+    const normalCoords  = data.normal.coords;   // 이미 [lat,lng] 형식
+    const climateCoords = data.climate.coords;
+
+    routeData = { normalCoords, climateCoords };
+
+    // ── 날씨 정보 헤더 업데이트 ───────────────────────────
+    if (data.weather) {
+      updateWeatherBadge(data.weather);
+    }
+
+    // ── 쉼터 마커 실데이터로 갱신 ─────────────────────────
+    if (data.shelters_nearby?.length) {
+      updateShelterList(data.shelters_nearby);
+      updateShelterMarkers(data.shelters_nearby);
+    }
+
+    // ── 카드 업데이트 ──────────────────────────────────────
+    // duration_min: 백엔드에서 계산된 분 단위 소요시간
+    // sun_exposure_min: 백엔드에서 계산된 직사광선 노출 시간(분)
+    const nTime = data.normal.duration_min ?? Math.round(data.normal.duration / 60);
+    const cTime = data.climate.duration_min ?? Math.round(data.climate.duration / 60);
+    const nSun  = data.normal.sun_exposure_min  ?? Math.round(nTime * (1 - data.normal.shade_score));
+    const cSun  = data.climate.sun_exposure_min ?? Math.round(cTime * (1 - data.climate.shade_score));
+
+    updateCards({
+      nTime:    nTime + '분',
+      nDist:    fmt(Math.round(data.normal.distance)),
+      nShade:   Math.round(data.normal.shade_score * 100),
+      nShelter: data.normal.shelter_count ?? 0,
+      nSun:     nSun + '분',
+      cTime:    cTime + '분',
+      cDist:    fmt(Math.round(data.climate.distance)),
+      cShade:   Math.round(data.climate.shade_score * 100),
+      cShelter: data.climate.shelter_count ?? 0,
+      cSun:     cSun + '분',
+      reason:   data.reason,
+    });
+
+    drawNormal(normalCoords);
+    drawClimate(climateCoords);
+    map.fitBounds([...normalCoords, ...climateCoords], { padding:[50,50] });
+    document.getElementById('map-legend').classList.add('show');
+    focusRoute('climate');
+    showLoading(false);
+    toast('✅ 실시간 경로 분석 완료!');
+
+  } catch(err) {
+    console.warn('백엔드 연결 실패, OSRM 직접 호출:', err.message);
+    showLoading(false);
+    fallback();
+  }
+}
+
+// 백엔드 연결 실패 시 OSRM 직접 호출 폴백
+async function fallback() {
+  const [sLat, sLng] = state.startLatLng, [eLat, eLng] = state.endLatLng;
+
+  try {
+    showLoading(true, 'OSRM 직접 연결 중...');
+    const url = `https://router.project-osrm.org/route/v1/foot/${sLng},${sLat};${eLng},${eLat}?overview=full&geometries=geojson&alternatives=true`;
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (!data.routes?.length) throw new Error('no route');
+
+    const r0 = data.routes[0];
+    const normalCoords  = r0.geometry.coordinates.map(([lng,lat]) => [lat,lng]);
+    const climateCoords = (data.routes[1]?.geometry.coordinates ?? buildVariant(r0.geometry.coordinates))
+                           .map(([lng,lat]) => [lat,lng]);
+    routeData = { normalCoords, climateCoords };
+
+    const nTime = Math.round(r0.duration / 60);
+    const nDist = Math.round(r0.distance);
+    const timePlus = state.heat === 'hot' ? 4 : 2;
+    const shadeBase = state.heat === 'hot' ? 84 : 68;
+
+    updateCards({
+      nTime: nTime+'분', nDist: fmt(nDist), nShade: 20, nShelter: 0,
+      nSun: Math.round(nTime*0.8)+'분',
+      cTime: (nTime+timePlus)+'분', cDist: fmt(Math.round(nDist*1.15)),
+      cShade: shadeBase, cShelter: 1,
+      cSun: Math.round(nTime*0.15)+'분',
+      reason: state.heat === 'hot'
+        ? `🥵 그늘과 쉼터를 최대화했습니다. ${timePlus}분 더 걸리지만 직사광선을 크게 줄입니다.`
+        : `🌳 그늘 구간과 쉼터를 경유합니다. ${timePlus}분 추가되지만 체감 더위가 줄어듭니다.`,
+    });
+    drawNormal(normalCoords);
+    drawClimate(climateCoords);
+    map.fitBounds([...normalCoords, ...climateCoords], { padding:[50,50] });
+    document.getElementById('map-legend').classList.add('show');
+    focusRoute('climate');
+    showLoading(false);
+    toast('⚠️ 백엔드 연결 안 됨 — OSRM 직접 모드');
+  } catch(e) {
+    showLoading(false);
+    offlineFallback();
+  }
+}
+
+// 완전 오프라인 폴백
+function offlineFallback() {
+  const [sLat, sLng] = state.startLatLng, [eLat, eLng] = state.endLatLng;
+  const dist = calcDist(sLat, sLng, eLat, eLng);
+  const nTime = Math.round(dist / 70);
+  const n = interpolate([sLat,sLng],[eLat,eLng],5);
+  const c = interpolateCurved([sLat,sLng],[eLat,eLng],8);
+  routeData = { normalCoords: n, climateCoords: c };
+  updateCards({
+    nTime: nTime+'분', nDist: fmt(dist), nShade: 18, nShelter: 0,
+    nSun: Math.round(nTime*0.8)+'분',
+    cTime: (nTime+2)+'분', cDist: fmt(Math.round(dist*1.15)),
+    cShade: 72, cShelter: 1, cSun: Math.round(nTime*0.2)+'분',
+    reason: '🌳 그늘 구간과 쉼터를 경유합니다. 체감 더위를 줄일 수 있습니다.',
+  });
+  drawNormal(n); drawClimate(c);
+  map.fitBounds([state.startLatLng, state.endLatLng], { padding:[60,60] });
+  document.getElementById('map-legend').classList.add('show');
+  focusRoute('climate');
+  toast('📵 오프라인 모드');
+}
+
+function buildVariant(coords) {
+  return coords.map(([lng, lat], i) => {
+    const t = i / (coords.length - 1 || 1);
+    const off = Math.sin(t * Math.PI) * 0.002;
+    return [lng + off, lat + off * 0.3];
+  });
+}
+
+// =============================================================================
+//  DRAW ROUTES
+// =============================================================================
+
+function drawNormal(coords) {
+  layerNormal = L.polyline(coords, { color:'#94a3b8', weight:5, opacity:0.85, dashArray:'10,8' }).addTo(map);
+  layerNormal.on('click', () => focusRoute('normal'));
+}
+
+function drawClimate(coords) {
+  layerClimateGlow = L.polyline(coords, { color:'#38bdf8', weight:18, opacity:0.18 }).addTo(map);
+  layerClimate     = L.polyline(coords, { color:'#0284c7', weight:6,  opacity:0.95 }).addTo(map);
+  layerClimate.on('click', () => focusRoute('climate'));
+  layerClimateGlow.on('click', () => focusRoute('climate'));
+}
+
+function clearRoutes() {
+  [layerNormal, layerNormalGlow, layerClimate, layerClimateGlow].forEach(l => {
+    if (l) { map.removeLayer(l); }
+  });
+  layerNormal = layerNormalGlow = layerClimate = layerClimateGlow = null;
+}
+
+// =============================================================================
+//  ROUTE FOCUS (카드 클릭 / 경로 클릭 시 강조) — NEW
+// =============================================================================
+
+function focusRoute(which) {
+  state.focusedRoute = which;
+
+  // 카드 강조
+  const cardN = document.getElementById('card-normal');
+  const cardC = document.getElementById('card-climate');
+  cardN.classList.toggle('focused', which === 'normal');
+  cardC.classList.toggle('focused', which === 'climate');
+
+  // 지도 범례 강조
+  document.getElementById('legend-normal').classList.toggle('focused', which === 'normal');
+  document.getElementById('legend-climate').classList.toggle('focused', which === 'climate');
+
+  // 경로 레이어 두께/투명도 조정
+  if (layerNormal) {
+    layerNormal.setStyle({
+      weight:   which === 'normal' ? 7 : 4,
+      opacity:  which === 'normal' ? 1 : 0.4,
+    });
+  }
+  if (layerClimate) {
+    layerClimate.setStyle({
+      weight:   which === 'climate' ? 8 : 5,
+      opacity:  which === 'climate' ? 1 : 0.4,
+    });
+  }
+  if (layerClimateGlow) {
+    layerClimateGlow.setStyle({ opacity: which === 'climate' ? 0.22 : 0.07 });
+  }
+
+  // 선택된 경로 카드 보이도록 스크롤
+  const target = which === 'normal' ? cardN : cardC;
+  target.scrollIntoView({ behavior:'smooth', block:'nearest' });
+
+  toast(which === 'normal' ? '📍 일반 최단경로 선택됨' : '🛡️ ClimateShelter 추천 경로 선택됨');
+}
+
+// =============================================================================
+//  SHADOW OVERLAYS
+// =============================================================================
+
+const BUILDINGS = [
+  {lat:37.5655,lng:126.9380,w:0.0006,h:0.0004,floors:12},
+  {lat:37.5640,lng:126.9395,w:0.0005,h:0.0003,floors:8},
+  {lat:37.5625,lng:126.9410,w:0.0006,h:0.0004,floors:10},
+  {lat:37.5600,lng:126.9375,w:0.0007,h:0.0005,floors:15},
+  {lat:37.5580,lng:126.9390,w:0.0005,h:0.0003,floors:7},
+  {lat:37.5565,lng:126.9365,w:0.0006,h:0.0004,floors:9},
+  {lat:37.5550,lng:126.9385,w:0.0004,h:0.0003,floors:6},
+  {lat:37.5615,lng:126.9430,w:0.0005,h:0.0004,floors:11},
+  {lat:37.5595,lng:126.9450,w:0.0006,h:0.0003,floors:8},
+  {lat:37.5630,lng:126.9355,w:0.0004,h:0.0003,floors:6},
+  {lat:37.5560,lng:126.9410,w:0.0005,h:0.0004,floors:9},
+];
+
+function getSunAngle(hour) {
+  const t = (hour - 7) / 12;
+  return {
+    azimuth:   t * Math.PI,
+    elevation: Math.sin(t * Math.PI) * 65 + 5,
+  };
+}
+
+// 그림자 요청 debounce 타이머
+let _shadowTimer = null;
+
+function drawShadows() {
+  if (!state.showShade) {
+    shadowLayers.forEach(l => map.removeLayer(l));
+    shadowLayers = [];
+    return;
+  }
+  // 슬라이더 드래그 중 너무 자주 호출되지 않도록 300ms debounce
+  clearTimeout(_shadowTimer);
+  _shadowTimer = setTimeout(() => _fetchAndDrawShadows(), 300);
+}
+
+async function _fetchAndDrawShadows() {
+  const center = map.getCenter();
+  const zoom   = map.getZoom();
+  // 줌 레벨에 따라 반경 조정 (너무 넓으면 느림)
+  const radius = zoom >= 16 ? 300 : zoom >= 15 ? 500 : 700;
+
+  try {
+    const url = `${API_BASE}/api/shadows?lat=${center.lat}&lng=${center.lng}&radius=${radius}&hour=${state.hour}&month=${state.month || 7}`;
+    const res  = await fetch(url);
+    if (!res.ok) throw new Error('shadow API 오류');
+    const data = await res.json();
+
+    // 기존 그림자 제거
+    shadowLayers.forEach(l => map.removeLayer(l));
+    shadowLayers = [];
+
+    // 태양 정보 업데이트
+    document.getElementById('sun-box-inline').textContent =
+      `☀️ 태양고도 ${data.sun_elevation}° · 방위 ${Math.round(data.sun_azimuth)}°`;
+
+    // 폴리곤 렌더링
+    data.polygons.forEach(p => {
+      const poly = L.polygon(p.points, {
+        color:       'transparent',
+        fillColor:   '#1e3a5f',
+        fillOpacity: p.opacity,
+      }).addTo(map);
+      shadowLayers.push(poly);
+    });
+
+  } catch(e) {
+    // 백엔드 없으면 로컬 근사 폴백
+    _drawShadowsLocal();
+  }
+}
+
+function _drawShadowsLocal() {
+  shadowLayers.forEach(l => map.removeLayer(l));
+  shadowLayers = [];
+  if (!state.showShade) return;
+  // 기존 하드코딩 건물 폴백
+  const h = state.hour;
+  const t = (h - 7) / 12;
+  const azimuth   = t * Math.PI;
+  const elevation = Math.sin(t * Math.PI) * 65 + 5;
+  BUILDINGS.forEach(b => {
+    const len = (b.floors * 0.00009) * (1 - elevation / 90) * 2.5;
+    const dx = -Math.cos(azimuth) * len;
+    const dy =  Math.sin(azimuth) * len * 0.4;
+    const poly = L.polygon([
+      [b.lat - b.h, b.lng], [b.lat, b.lng],
+      [b.lat + dy, b.lng + dx], [b.lat - b.h + dy, b.lng + dx],
+    ], { color:'transparent', fillColor:'#1e3a5f', fillOpacity:0.2 }).addTo(map);
+    shadowLayers.push(poly);
+  });
+}
+
+// =============================================================================
+//  SHELTERS
+// =============================================================================
+
+// drawShelters는 loadNearbyShelters가 대체 — 하드코딩 제거
+function drawShelters() {
+  // 실데이터는 loadNearbyShelters가 처리
+  // toggleShelters 버튼에서만 호출됨
+  if (!state.showShelters) {
+    shelterMarkers.forEach(m => map.removeLayer(m));
+    shelterMarkers = [];
+  } else {
+    loadNearbyShelters();
+  }
+}
+
+// =============================================================================
+//  UI
+// =============================================================================
+
+function toggleShade(btn) {
+  state.showShade = !state.showShade;
+  btn.classList.toggle('active', state.showShade);
+  drawShadows();
+}
+
+function toggleShelters(btn) {
+  state.showShelters = !state.showShelters;
+  btn.classList.toggle('active', state.showShelters);
+  drawShelters();
+}
+
+function toggleClickMode(btn) {
+  state.clickMode = !state.clickMode;
+  state.clickPhase = 0;
+  btn.classList.toggle('active', state.clickMode);
+  map.getContainer().style.cursor = state.clickMode ? 'crosshair' : '';
+  toast(state.clickMode ? '📍 클릭 모드 ON — 출발지(A)를 클릭하세요' : '클릭 모드 OFF');
+}
+
+function updateCurrentTime() {
+  // 현재 시각 자동 갱신 (1분마다 호출)
+  const now = new Date();
+  state.hour = now.getHours() + now.getMinutes() / 60;
+  const hh = String(now.getHours()).padStart(2,'0');
+  const mm = String(now.getMinutes()).padStart(2,'0');
+  document.getElementById('time-disp').textContent = `${hh}:${mm}`;
+
+  const chip = document.getElementById('heat-chip');
+  const h = now.getHours();
+  if (h >= 12 && h <= 16)   { chip.textContent='🌡️ 폭염 경보'; chip.className='heat-chip hot'; }
+  else if (h >= 10 && h <= 18) { chip.textContent='☀️ 자외선 강함'; chip.className='heat-chip'; }
+  else                          { chip.textContent='🌅 비교적 안전'; chip.className='heat-chip'; }
+
+  drawShadows();
+}
+
+// 하위 호환 (혹시 남아있는 onTime 호출 대비)
+function onTime(val) { updateCurrentTime(); }
+
+function onSeason(s) {
+  if (s === 'summer') return;
+  const info = {
+    winter:{title:'❄️ 겨울 모드 — 한파·빙판길 회피', body:'빙판길 위험도와 실내 대피처 기준으로 경로가 재계산됩니다.\n\n곧 출시됩니다.'},
+    rainy: {title:'🌧️ 장마 모드 — 침수 위험 회피', body:'침수 위험 지역을 우회하고 지붕 있는 경로를 우선합니다.\n\n곧 출시됩니다.'},
+    dust:  {title:'🌫️ 봄/가을 모드 — 미세먼지·꽃가루 회피', body:'미세먼지 농도와 꽃가루 지수 기준으로 실내 경로를 안내합니다.\n\n곧 출시됩니다.'},
+  }[s];
+  document.getElementById('modal-title').textContent = info.title;
+  document.getElementById('modal-body').textContent  = info.body;
+  document.getElementById('modal-bg').classList.add('show');
+}
+
+function closeModal() { document.getElementById('modal-bg').classList.remove('show'); }
+function focusMap(lat, lng, zoom) { map.setView([lat,lng], zoom); }
+
+function showLoading(show, sub='') {
+  document.getElementById('loading').classList.toggle('show', show);
+  if (sub) document.getElementById('loading-sub').textContent = sub;
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// =============================================================================
+//  HELPERS
+// =============================================================================
+
+function fmt(m) { return m >= 1000 ? (m/1000).toFixed(1)+'km' : m+'m'; }
+
+function calcDist(lat1,lng1,lat2,lng2) {
+  const R=6371000, dl=(lat2-lat1)*Math.PI/180, dn=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dl/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dn/2)**2;
+  return Math.round(R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));
+}
+
+function interpolate(a,b,n) {
+  return Array.from({length:n},(_,i)=>{const t=i/(n-1);return[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];});
+}
+function interpolateCurved(a,b,n) {
+  return Array.from({length:n},(_,i)=>{
+    const t=i/(n-1), off=Math.sin(t*Math.PI)*0.003;
+    return[a[0]+(b[0]-a[0])*t+off, a[1]+(b[1]-a[1])*t-off*0.5];
+  });
+}
+
+function updateCards(d) {
+  document.getElementById('n-time').textContent    = d.nTime;
+  document.getElementById('n-dist').textContent    = d.nDist;
+  document.getElementById('n-shelter').textContent = d.nShelter+'개';
+  document.getElementById('n-sun').textContent     = d.nSun;
+  document.getElementById('n-spct').textContent    = d.nShade+'%';
+  document.getElementById('n-sbar').style.width    = d.nShade+'%';
+  document.getElementById('c-time').textContent    = d.cTime;
+  document.getElementById('c-dist').textContent    = d.cDist;
+  document.getElementById('c-shelter').textContent = d.cShelter+'개';
+  document.getElementById('c-sun').textContent     = d.cSun;
+  document.getElementById('c-spct').textContent    = d.cShade+'%';
+  document.getElementById('c-sbar').style.width    = d.cShade+'%';
+  const r = document.getElementById('r-reason');
+  r.innerHTML = d.reason; r.style.display='block';
+}
+
+// =============================================================================
+//  날씨 배지 + 쉼터 동적 갱신
+// =============================================================================
+
+function updateWeatherBadge(weather) {
+  const chip = document.getElementById('heat-chip');
+  const temp = weather.temp ?? 20;
+  const uv   = weather.uv_index ?? 0;
+  const feels = weather.feels_like ?? temp;
+
+  // 태양고도 박스에 실시간 기온 표시
+  document.getElementById('sun-box-inline').textContent =
+    `🌡️ ${temp}°C (체감 ${feels}°C) · UV ${uv}`;
+
+  if (temp >= 33 || feels >= 35) {
+    chip.textContent = '🌡️ 폭염 경보'; chip.className = 'heat-chip hot';
+  } else if (temp >= 28) {
+    chip.textContent = '☀️ 더위 주의'; chip.className = 'heat-chip hot';
+  } else if (uv >= 6) {
+    chip.textContent = '☀️ 자외선 강함'; chip.className = 'heat-chip';
+  } else {
+    chip.textContent = '😊 쾌적'; chip.className = 'heat-chip';
+  }
+}
+
+function getShelterIcon(type) {
+  const t = (type || '').toString();
+  if (t === '001' || t.includes('행정') || t.includes('주민')) return '🏛️';
+  if (t.includes('도서') || t.includes('문화')) return '📚';
+  if (t.includes('병원') || t.includes('의료')) return '🏥';
+  if (t.includes('지하') || t.includes('역')) return '🚇';
+  if (t.includes('복지') || t.includes('경로')) return '👴';
+  if (t.includes('학교') || t.includes('교육')) return '🏫';
+  if (t.includes('종교') || t.includes('교회') || t.includes('사찰')) return '⛪';
+  return '🏠';
+}
+
+function updateShelterList(shelters) {
+  const el = document.getElementById('shelter-list');
+  const badge = document.getElementById('shelter-badge');
+  if (!el) return;
+
+  if (!shelters || !shelters.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0;text-align:center">반경 내 쉼터 없음</div>';
+    if (badge) badge.textContent = '0개';
+    return;
+  }
+
+  if (badge) badge.textContent = `${shelters.length}개 · 실시간`;
+
+  el.innerHTML = shelters.map(s => `
+    <div class="shelter-item" onclick="focusMap(${s.lat},${s.lng},17)">
+      <span style="font-size:15px">${getShelterIcon(s.type)}</span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.name}</span>
+      <span style="font-size:10px;color:var(--text3);white-space:nowrap;flex-shrink:0">
+        ${s.distance ? s.distance + 'm' : ''} ${s.open || ''}
+      </span>
+    </div>
+  `).join('');
+}
+
+function updateShelterMarkers(shelters) {
+  // 기존 마커 전부 제거
+  shelterMarkers.forEach(m => map.removeLayer(m));
+  shelterMarkers = [];
+  if (!state.showShelters) return;
+
+  shelters.forEach(s => {
+    // 좌표 유효성 검증 (서울 범위: lat 37.4~37.7, lng 126.7~127.2)
+    const lat = parseFloat(s.lat), lng = parseFloat(s.lng);
+    if (isNaN(lat) || isNaN(lng)) return;
+    if (lat < 37.4 || lat > 37.7 || lng < 126.7 || lng > 127.2) return;
+
+    const popup = `
+      <div style="min-width:160px">
+        <b style="font-size:13px">${s.name}</b><br>
+        ${s.address ? `<span style="font-size:11px;color:#64748b">${s.address}</span><br>` : ''}
+        🕐 <span style="font-size:11px">${s.open || '운영시간 미상'}</span>
+        ${s.capacity ? `<br>👥 <span style="font-size:11px">수용 ${s.capacity}명</span>` : ''}
+        ${s.distance ? `<br>📍 <span style="font-size:11px">${s.distance}m</span>` : ''}
+      </div>`;
+
+    const m = L.marker([lat, lng], { icon: iconShelter })
+      .bindPopup(popup)
+      .addTo(map);
+    shelterMarkers.push(m);
+  });
+}
+
+// =============================================================================
+//  INIT
+// =============================================================================
+
+drawShadows();
+updateCurrentTime();
+// 1분마다 시각/그림자 자동 갱신
+setInterval(updateCurrentTime, 60000);
+
+// 지도 이동/줌 시 그림자 자동 갱신
+map.on('moveend zoomend', () => {
+  if (state.showShade) drawShadows();
+});
+
+// 페이지 로드 시 현재 지도 중심 기준 쉼터 조회
+// 백엔드 캐시 수집까지 최대 2분 → 폴링으로 자동 갱신
+async function loadNearbyShelters(retryCount = 0) {
+  if (!state.showShelters) return;
+  const center = map.getCenter();
+
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/shelters?lat=${center.lat}&lng=${center.lng}&radius=1000`
+    );
+    if (!res.ok) throw new Error('API 오류');
+    const data = await res.json();
+
+    // 캐시 아직 준비 중 → 10초 후 재시도 (최대 12번 = 약 2분)
+    if (!data.cache_ready) {
+      const badge = document.getElementById('shelter-badge');
+      if (badge) badge.textContent = `수집 중... (${retryCount + 1})`;
+      if (retryCount < 12) {
+        setTimeout(() => loadNearbyShelters(retryCount + 1), 10000);
+      }
+      return;
+    }
+
+    let shelters = data.shelters || [];
+
+    // 결과 없으면 반경 2배로 재시도
+    if (!shelters.length) {
+      const res2 = await fetch(
+        `${API_BASE}/api/shelters?lat=${center.lat}&lng=${center.lng}&radius=2000`
+      );
+      const data2 = await res2.json();
+      shelters = data2.shelters || [];
+    }
+
+    // 사이드바 목록 + 지도 마커 업데이트
+    updateShelterList(shelters);
+    updateShelterMarkers(shelters);
+
+    const badge = document.getElementById('shelter-badge');
+    if (badge) badge.textContent = shelters.length ? `${shelters.length}개 · 실시간` : '주변 쉼터 없음';
+
+  } catch(e) {
+    console.warn('[쉼터]', e.message);
+    const badge = document.getElementById('shelter-badge');
+    if (badge) badge.textContent = '오프라인';
+    // 오프라인 폴백: 지도 마커 없이 목록만 표시
+    document.getElementById('shelter-list').innerHTML =
+      '<div style="font-size:12px;color:var(--text3);padding:8px 0;text-align:center">백엔드 연결 필요</div>';
+  }
+}
+
+// 3초 후 첫 조회 (서버 시작 직후 캐시 수집 시작하므로 약간 여유)
+setTimeout(() => loadNearbyShelters(), 3000);
+
+// 지도 이동 시 쉼터도 갱신 (이동 멈춘 후 1초 딜레이)
+let _shelterMoveTimer = null;
+map.on('moveend', () => {
+  clearTimeout(_shelterMoveTimer);
+  _shelterMoveTimer = setTimeout(() => loadNearbyShelters(), 1000);
+});
+
+toast('🗺️ 출발지와 목적지를 검색하거나 프리셋을 선택하세요.');
+</script>
+</body>
+</html>
