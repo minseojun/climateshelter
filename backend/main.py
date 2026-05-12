@@ -783,6 +783,167 @@ async def get_shadows(lat: float, lng: float, radius: float = 400, hour: float =
     }
 
 
+# =============================================================================
+#  AI Agent 엔드포인트
+# =============================================================================
+
+class ChatRequest(BaseModel):
+    message: str                    # 사용자 자연어 요청
+    start_lat: float
+    start_lng: float
+    end_lat: float
+    end_lng: float
+    current_route: dict = {}        # 현재 경로 데이터 (옵션)
+    weather: dict = {}
+    history: list = []              # 대화 히스토리
+
+
+class SegmentAnalysisRequest(BaseModel):
+    coords: list                    # 경로 좌표
+    edge_scores: list = []          # 엣지별 점수 (옵션)
+    weather: dict = {}
+
+
+@app.post("/api/chat")
+async def chat_agent(req: ChatRequest):
+    """
+    대화형 경로 조정 AI Agent
+    사용자의 자연어 요청을 분석해서:
+    1. 경로 재탐색 파라미터 조정
+    2. 맞춤형 조언 생성
+    3. 추가 질문/안내
+    """
+    if not ANTHROPIC_KEY:
+        return {
+            "reply": "AI 기능을 사용하려면 API 키가 필요합니다.",
+            "action": None,
+            "ai_powered": False,
+        }
+
+    try:
+        import anthropic
+        client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_KEY)
+
+        weather = req.weather
+        temp    = weather.get("temp", 30)
+        uv      = weather.get("uv_index", 5)
+
+        # 현재 경로 정보
+        route = req.current_route
+        normal_shade  = round(route.get("normal",  {}).get("shade_score",  0) * 100)
+        climate_shade = round(route.get("climate", {}).get("shade_score",  0) * 100)
+        climate_time  = route.get("climate", {}).get("duration_min", 0)
+        shelters      = route.get("climate", {}).get("shelter_count", 0)
+
+        system_prompt = f"""당신은 ClimateShelter의 AI 경로 안내 어시스턴트입니다.
+현재 서울의 기온은 {temp}°C, 자외선지수는 {uv}입니다.
+현재 추천 경로: 그늘 {climate_shade}%, 소요 {climate_time}분, 쉼터 {shelters}개 경유.
+
+사용자의 요청을 분석해서 JSON으로만 응답하세요:
+{{
+  "reply": "사용자에게 보여줄 한국어 응답 (2-3문장, 친절하게)",
+  "action": "adjust_weights" | "show_analysis" | "add_waypoint" | "none",
+  "params": {{
+    "shade_weight": 숫자(기본 3.5, 최대 8.0),
+    "shelter_bonus": 숫자(기본 0.25, 최대 1.0),
+    "slope_penalty": 숫자(기본 0.2, 최대 0.5),
+    "reason": "파라미터 조정 이유"
+  }}
+}}
+
+action 선택 기준:
+- 그늘/시원함 요청 → adjust_weights (shade_weight 높이기)
+- 쉼터/휴식 요청 → adjust_weights (shelter_bonus 높이기)
+- 노약자/임산부/아이 언급 → adjust_weights (shelter_bonus, slope_penalty 조정)
+- 경로 분석 요청 → show_analysis
+- 기타 질문 → none"""
+
+        messages = req.history[-4:] + [{"role": "user", "content": req.message}]
+
+        msg = await client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=400,
+            system=system_prompt,
+            messages=messages,
+        )
+
+        import json as _json
+        raw = msg.content[0].text.strip()
+        # JSON 파싱
+        raw = raw.replace("```json", "").replace("```", "").strip()
+        result = _json.loads(raw)
+        result["ai_powered"] = True
+        print(f"[AI Agent] 요청: {req.message[:30]} → action: {result.get('action')}")
+        return result
+
+    except Exception as e:
+        print(f"[AI Agent 오류] {e}")
+        return {
+            "reply": "죄송해요, 잠시 후 다시 시도해주세요.",
+            "action": "none",
+            "ai_powered": False,
+        }
+
+
+@app.post("/api/analyze-route")
+async def analyze_route(req: SegmentAnalysisRequest):
+    """
+    폭염 취약 구간 탐지 — AI가 경로를 분석해서 위험 구간 설명
+    """
+    if not ANTHROPIC_KEY:
+        return {"analysis": "AI 분석 기능을 사용하려면 API 키가 필요합니다.", "ai_powered": False}
+
+    try:
+        import anthropic
+        client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_KEY)
+
+        coords = req.coords
+        weather = req.weather
+        temp = weather.get("temp", 30)
+        uv   = weather.get("uv_index", 5)
+        total_pts = len(coords)
+
+        # 경로를 5구간으로 나눠서 분석
+        segments = []
+        chunk = max(1, total_pts // 5)
+        for i in range(5):
+            start = i * chunk
+            end   = min((i+1) * chunk, total_pts - 1)
+            if start >= total_pts: break
+            segments.append({
+                "구간": f"{i+1}구간",
+                "시작점": f"{coords[start][0]:.4f},{coords[start][1]:.4f}",
+                "전체의": f"{round(start/total_pts*100)}~{round(end/total_pts*100)}%",
+            })
+
+        prompt = f"""당신은 폭염 보행 안전 전문가입니다.
+현재 기온: {temp}°C, 자외선: {uv}, 총 경로 포인트: {total_pts}개
+
+경로 구간 정보:
+{segments}
+
+아래 형식으로 한국어 분석을 작성하세요 (총 3-4문장):
+1. 전체 경로 위험도 평가
+2. 가장 주의해야 할 구간과 이유
+3. 실용적인 보행 조언
+
+이모지를 활용해 가독성을 높이세요."""
+
+        msg = await client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return {
+            "analysis":  msg.content[0].text.strip(),
+            "ai_powered": True,
+        }
+
+    except Exception as e:
+        print(f"[경로 분석 오류] {e}")
+        return {"analysis": "분석 중 오류가 발생했습니다.", "ai_powered": False}
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "version": "1.2.0", "shelter_cache": len(_shelter_cache), "tree_cache": len(_tree_cache)}
