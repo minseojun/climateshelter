@@ -957,7 +957,9 @@ async def analyze_route(req: SegmentAnalysisRequest):
 #  시민 제보 시스템 — SQLite
 # =============================================================================
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "reports.db")
+# Railway Volume 마운트 경로 (/app/data) 또는 로컬 경로
+_data_dir = "/app/data" if os.path.exists("/app/data") else os.path.dirname(__file__)
+DB_PATH = os.path.join(_data_dir, "reports.db")
 
 def init_db():
     """DB 초기화 — 서버 시작 시 호출"""
