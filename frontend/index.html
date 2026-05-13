@@ -221,6 +221,18 @@ header {
 
 /* ── USER LOCATION ── */
 .user-location-marker { width: 14px; height: 14px; background: var(--accent); border: 2.5px solid white; border-radius: 50%; box-shadow: 0 0 0 4px rgba(0,113,227,0.2); }
+.report-mode-banner {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  z-index: 1000; background: var(--accent); color: white;
+  padding: 8px 18px; border-radius: 20px; font-size: 13px; font-weight: 600;
+  box-shadow: 0 4px 16px rgba(0,113,227,0.4); display: none;
+  white-space: nowrap; letter-spacing: -0.2px;
+  animation: bounceIn 0.3s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes bounceIn { from{transform:translateX(-50%) scale(0.8);opacity:0} to{transform:translateX(-50%) scale(1);opacity:1} }
+.report-mode-banner.show { display: block; }
+.report-pin-temp { width: 32px; height: 32px; background: var(--accent); border: 3px solid white; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 2px 10px rgba(0,113,227,0.4); }
+.report-pin-temp-inner { transform: rotate(45deg); font-size: 14px; display: flex; align-items: center; justify-content: center; height: 100%; }
 
 /* ── 모바일 반응형 ── */
 @media (max-width: 768px) {
@@ -555,6 +567,11 @@ header {
   <div class="map-wrap">
     <div id="map"></div>
 
+    <!-- 제보 위치 지정 모드 배너 -->
+    <div class="report-mode-banner" id="report-mode-banner">
+      🗺️ 제보할 위치를 지도에서 탭하세요 &nbsp;✕
+    </div>
+
     <div class="map-controls">
       <button class="map-btn" id="btn-locate" onclick="locateMe()">📍 내 위치</button>
       <button class="map-btn active" id="btn-shade" onclick="toggleShade(this)">🌳 그늘</button>
@@ -563,7 +580,7 @@ header {
     </div>
 
     <!-- 시민 제보 FAB -->
-    <button class="report-fab" id="report-fab" onclick="openReportModal()" title="이 위치 제보하기">
+    <button class="report-fab" id="report-fab" onclick="toggleReportMode()" title="위치 제보하기">
       📍
     </button>
 
@@ -571,8 +588,8 @@ header {
     <div class="report-modal" id="report-modal" onclick="closeReportModal(event)">
       <div class="report-sheet">
         <div class="report-handle"></div>
-        <div class="report-title">📍 이 위치 제보하기</div>
-        <div class="report-subtitle" id="report-location-text">지도 중심 위치에 제보합니다</div>
+        <div class="report-title">📍 위치 제보하기</div>
+        <div class="report-subtitle" id="report-location-text" style="color:var(--accent);font-weight:500">지도를 탭해서 위치를 지정하세요</div>
         <div class="report-types">
           <button class="report-type-btn" onclick="selectReportType('shade_good', this)">
             <span class="rt-emoji">🌳</span>
@@ -592,6 +609,9 @@ header {
           </button>
         </div>
         <textarea class="report-comment" id="report-comment" rows="2" placeholder="추가 설명 (선택사항) — 예: 큰 나무 있어요, 아스팔트 복사열 심해요"></textarea>
+        <div id="report-pin-info" style="display:none;padding:8px 10px;background:var(--accent-light);border-radius:8px;margin-bottom:10px;font-size:12px;color:var(--accent);font-weight:500;text-align:center;">
+          📍 <span id="report-pin-addr">위치 선택됨</span>
+        </div>
         <button class="report-submit" id="report-submit-btn" onclick="submitReport()" disabled>
           제보 등록
         </button>
@@ -681,6 +701,38 @@ const iconShelter = L.divIcon({ html: `<div style="background:#f97316;color:whit
 // =============================================================================
 
 map.on('click', async function(e) {
+  // 제보 위치 지정 모드
+  if (reportMode) {
+    const { lat, lng } = e.latlng;
+    reportLat = lat;
+    reportLng = lng;
+
+    // 임시 핀 마커
+    if (reportTempMarker) map.removeLayer(reportTempMarker);
+    const icon = L.divIcon({
+      html: '<div class="report-pin-temp"><div class="report-pin-temp-inner">📍</div></div>',
+      className: '', iconSize: [32,32], iconAnchor: [16,32],
+    });
+    reportTempMarker = L.marker([lat, lng], { icon }).addTo(map);
+
+    // 역지오코딩으로 주소 가져오기
+    let addr = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=ko`);
+      const data = await res.json();
+      if (data.display_name) addr = data.display_name.split(',').slice(0,2).join(', ');
+    } catch(e) {}
+
+    // 모드 종료 + 모달 열기
+    toggleReportMode();
+    document.getElementById('report-location-text').textContent = `📍 ${addr}`;
+    document.getElementById('report-location-text').style.color = 'var(--green-dark)';
+    document.getElementById('report-pin-info').style.display = 'block';
+    document.getElementById('report-pin-addr').textContent = addr;
+    openReportModal();
+    return;
+  }
+
   if (!state.clickMode) return;
   const { lat, lng } = e.latlng;
 
@@ -1462,17 +1514,43 @@ function updateShelterMarkers(shelters) {
 let selectedReportType = null;
 let reportMarkers = [];
 let reportLat = null, reportLng = null;
+let reportMode = false;
+let reportTempMarker = null;
+
+// ── 제보 위치 지정 모드 토글 ──────────────────────────────────────────
+function toggleReportMode() {
+  reportMode = !reportMode;
+  const fab    = document.getElementById('report-fab');
+  const banner = document.getElementById('report-mode-banner');
+
+  if (reportMode) {
+    fab.style.background = '#ff3b30';
+    fab.innerHTML = '✕';
+    banner.classList.add('show');
+    map.getContainer().style.cursor = 'crosshair';
+    toast('🗺️ 제보할 위치를 지도에서 탭하세요');
+  } else {
+    fab.style.background = '';
+    fab.innerHTML = '📍';
+    banner.classList.remove('show');
+    map.getContainer().style.cursor = '';
+    if (reportTempMarker) { map.removeLayer(reportTempMarker); reportTempMarker = null; }
+    reportLat = null; reportLng = null;
+  }
+}
+
+// 배너 클릭 시 모드 종료
+document.addEventListener('DOMContentLoaded', () => {
+  const banner = document.getElementById('report-mode-banner');
+  if (banner) banner.addEventListener('click', () => { if (reportMode) toggleReportMode(); });
+});
 
 function openReportModal() {
-  const center = map.getCenter();
-  reportLat = center.lat;
-  reportLng = center.lng;
-  document.getElementById('report-location-text').textContent =
-    `현재 지도 중심 위치 (${reportLat.toFixed(4)}, ${reportLng.toFixed(4)})`;
   selectedReportType = null;
   document.querySelectorAll('.report-type-btn').forEach(b => b.classList.remove('selected'));
   document.getElementById('report-comment').value = '';
   document.getElementById('report-submit-btn').disabled = true;
+  document.getElementById('report-pin-info').style.display = 'none';
   document.getElementById('report-modal').classList.add('show');
 }
 
