@@ -9,7 +9,7 @@ API 키 설정 (.env 파일):
   ANTHROPIC_API_KEY=sk-ant-...   ← 나중에 추가
 """
 
-import os, math, asyncio, time
+import os, math, asyncio, time, sqlite3
 import requests as _requests
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -616,8 +616,17 @@ async def get_route(req: RouteRequest):
     if effective_hour < 6 or effective_hour >= 20:
         effective_hour = 10.0
 
-    # bbox 안 가로수 가져오기
+    # bbox 안 가로수 + 제보 가져오기
     margin = 0.003
+    bbox_reports = get_reports_in_bbox(
+        min(req.start_lat, req.end_lat) - margin,
+        min(req.start_lng, req.end_lng) - margin,
+        max(req.start_lat, req.end_lat) + margin,
+        max(req.start_lng, req.end_lng) + margin,
+    )
+    if bbox_reports:
+        print(f"[제보] 경로 근처 제보 {len(bbox_reports)}개 반영")
+
     bbox_trees = get_trees_in_bbox(
         min(req.start_lat, req.end_lat) - margin,
         min(req.start_lng, req.end_lng) - margin,
@@ -942,6 +951,148 @@ async def analyze_route(req: SegmentAnalysisRequest):
     except Exception as e:
         print(f"[경로 분석 오류] {e}")
         return {"analysis": "분석 중 오류가 발생했습니다.", "ai_powered": False}
+
+
+# =============================================================================
+#  시민 제보 시스템 — SQLite
+# =============================================================================
+
+DB_PATH = os.path.join(os.path.dirname(__file__), "reports.db")
+
+def init_db():
+    """DB 초기화 — 서버 시작 시 호출"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS reports (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            lat       REAL NOT NULL,
+            lng       REAL NOT NULL,
+            type      TEXT NOT NULL,
+            comment   TEXT,
+            ai_tag    TEXT,
+            weight    REAL DEFAULT 1.0,
+            created   TEXT DEFAULT (datetime('now','localtime')),
+            verified  INTEGER DEFAULT 0
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+init_db()
+
+
+class ReportRequest(BaseModel):
+    lat:     float
+    lng:     float
+    type:    str      # "shade_good" | "heat_bad" | "shelter_found" | "danger"
+    comment: str = ""
+
+
+class ReportResponse(BaseModel):
+    id:      int
+    message: str
+    ai_tag:  str
+    weight:  float
+
+
+# 제보 타입 → 한국어 + 가중치
+REPORT_META = {
+    "shade_good":     {"label": "그늘 좋음",    "weight":  0.8, "emoji": "🌳"},
+    "heat_bad":       {"label": "열기 심함",    "weight": -0.6, "emoji": "🔥"},
+    "shelter_found":  {"label": "쉼터 발견",    "weight":  0.5, "emoji": "🏠"},
+    "danger":         {"label": "위험 구간",    "weight": -0.9, "emoji": "⚠️"},
+}
+
+
+@app.post("/api/reports", response_model=ReportResponse)
+async def submit_report(req: ReportRequest):
+    """시민 제보 제출 — Claude가 제보를 분석해서 태그 부여"""
+    meta = REPORT_META.get(req.type, {"label": req.type, "weight": 0.3, "emoji": "📍"})
+
+    # Claude로 제보 분석 (API 키 없으면 기본 태그)
+    ai_tag = meta["label"]
+    if ANTHROPIC_KEY and req.comment:
+        try:
+            import anthropic
+            client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_KEY)
+            msg = await client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=60,
+                messages=[{"role": "user", "content":
+                    f"보행자 제보: '{req.comment}' / 유형: {meta['label']}
+"
+                    f"이 제보를 10자 이내 핵심 태그로 요약하세요. 태그만 출력."}]
+            )
+            ai_tag = msg.content[0].text.strip()[:20]
+        except:
+            pass
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.execute(
+        "INSERT INTO reports (lat, lng, type, comment, ai_tag, weight) VALUES (?,?,?,?,?,?)",
+        (req.lat, req.lng, req.type, req.comment, ai_tag, meta["weight"])
+    )
+    report_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+
+    print(f"[제보] {meta['emoji']} {meta['label']} @ ({req.lat:.4f}, {req.lng:.4f}) — {ai_tag}")
+
+    return ReportResponse(
+        id=report_id,
+        message=f"{meta['emoji']} 제보 감사합니다! '{ai_tag}'로 등록됐어요.",
+        ai_tag=ai_tag,
+        weight=meta["weight"],
+    )
+
+
+@app.get("/api/reports")
+async def get_reports(lat: float, lng: float, radius: float = 500):
+    """반경 내 제보 목록 조회"""
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute(
+        "SELECT id, lat, lng, type, comment, ai_tag, weight, created FROM reports ORDER BY created DESC LIMIT 200"
+    ).fetchall()
+    conn.close()
+
+    result = []
+    for row in rows:
+        r_lat, r_lng = row[1], row[2]
+        dist = haversine(lat, lng, r_lat, r_lng)
+        if dist <= radius:
+            meta = REPORT_META.get(row[3], {"emoji": "📍", "label": row[3]})
+            result.append({
+                "id":      row[0],
+                "lat":     r_lat,
+                "lng":     r_lng,
+                "type":    row[3],
+                "emoji":   meta["emoji"],
+                "label":   meta["label"],
+                "comment": row[4],
+                "ai_tag":  row[5],
+                "weight":  row[6],
+                "created": row[7],
+                "distance": round(dist),
+            })
+
+    result.sort(key=lambda x: x["distance"])
+    return {"reports": result, "count": len(result)}
+
+
+def get_reports_in_bbox(min_lat, min_lng, max_lat, max_lng) -> list[dict]:
+    """경로 bbox 안 제보 반환 (경로 계산용)"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        rows = conn.execute(
+            """SELECT lat, lng, type, weight FROM reports
+               WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?
+               AND created >= datetime('now', '-30 days', 'localtime')""",
+            (min_lat, max_lat, min_lng, max_lng)
+        ).fetchall()
+        conn.close()
+        return [{"lat": r[0], "lng": r[1], "type": r[2], "weight": r[3]} for r in rows]
+    except:
+        return []
 
 
 @app.get("/health")
