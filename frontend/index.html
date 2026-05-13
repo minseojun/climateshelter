@@ -222,10 +222,107 @@ header {
 /* ── USER LOCATION ── */
 .user-location-marker { width: 14px; height: 14px; background: var(--accent); border: 2.5px solid white; border-radius: 50%; box-shadow: 0 0 0 4px rgba(0,113,227,0.2); }
 
+/* ── 모바일 반응형 ── */
 @media (max-width: 768px) {
-  .layout { flex-direction: column; }
-  .sidebar { width: 100%; max-height: 50vh; }
+  header { padding: 0 16px; height: 48px; }
+  .brand h1 { font-size: 15px; }
+  .slogan { display: none; }
+  .season-bar { overflow-x: auto; }
+  .season-tabs { gap: 0; }
+  .s-tab { padding: 7px 12px; font-size: 11px; }
+
+  /* 모바일: 지도 위 + 사이드바 아래 */
+  .layout { flex-direction: column-reverse; }
+  .sidebar {
+    width: 100%;
+    max-height: 42vh;
+    border-right: none;
+    border-top: 1px solid var(--border);
+    overflow-y: auto;
+  }
+  .map-wrap { flex: 1; min-height: 0; }
+
+  /* 사이드바 섹션 가로 스크롤 방지 */
+  .sec { padding: 12px 14px; }
+  .r-stats { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .stat-block { padding: 6px 8px; }
+
+  /* 지도 컨트롤 모바일 최적화 */
+  .map-controls { top: 8px; left: 8px; gap: 5px; }
+  .map-btn { padding: 7px 10px; font-size: 11px; }
+
+  /* 제보 버튼 — 모바일에서 더 크게 */
+  .report-fab { width: 52px; height: 52px; font-size: 22px; bottom: 20px; right: 16px; }
 }
+
+/* ── 시민 제보 UI ── */
+.report-fab {
+  position: absolute; bottom: 32px; right: 16px; z-index: 1000;
+  width: 46px; height: 46px;
+  background: var(--accent); color: white;
+  border: none; border-radius: 50%;
+  font-size: 20px; cursor: pointer;
+  box-shadow: 0 4px 20px rgba(0,113,227,0.4);
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.report-fab:hover { transform: scale(1.08); box-shadow: 0 6px 24px rgba(0,113,227,0.5); }
+.report-fab:active { transform: scale(0.96); }
+
+.report-modal {
+  position: fixed; inset: 0; z-index: 4000;
+  display: none; align-items: flex-end; justify-content: center;
+  background: rgba(0,0,0,0.3); backdrop-filter: blur(4px);
+}
+.report-modal.show { display: flex; }
+.report-sheet {
+  background: white; width: 100%; max-width: 480px;
+  border-radius: 20px 20px 0 0;
+  padding: 20px 20px 32px;
+  animation: slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes slideUp { from { transform:translateY(100%); } to { transform:translateY(0); } }
+.report-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 16px; }
+.report-title { font-size: 17px; font-weight: 700; margin-bottom: 4px; letter-spacing: -0.3px; }
+.report-subtitle { font-size: 13px; color: var(--text3); margin-bottom: 16px; }
+.report-types { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.report-type-btn {
+  padding: 12px 10px; border-radius: 12px;
+  border: 1.5px solid var(--border); background: var(--surface2);
+  cursor: pointer; text-align: center; font-family: var(--font);
+  transition: all 0.15s;
+}
+.report-type-btn:hover { border-color: var(--accent); background: var(--accent-light); }
+.report-type-btn.selected { border-color: var(--accent); background: var(--accent-light); }
+.report-type-btn .rt-emoji { font-size: 24px; display: block; margin-bottom: 4px; }
+.report-type-btn .rt-label { font-size: 12px; font-weight: 600; color: var(--text); }
+.report-comment {
+  width: 100%; padding: 10px 12px;
+  border: 1.5px solid var(--border); border-radius: 10px;
+  font-size: 13px; font-family: var(--font); color: var(--text);
+  resize: none; outline: none; margin-bottom: 12px;
+  transition: border-color 0.2s;
+}
+.report-comment:focus { border-color: var(--accent); }
+.report-submit {
+  width: 100%; padding: 13px;
+  background: var(--accent); color: white;
+  border: none; border-radius: 12px;
+  font-size: 15px; font-weight: 600; cursor: pointer;
+  font-family: var(--font); letter-spacing: -0.2px;
+  transition: opacity 0.2s;
+}
+.report-submit:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* 제보 마커 팝업 */
+.report-pin { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); border: 2px solid white; cursor: pointer; }
+.report-pin.shade_good    { background: #d4f5e2; }
+.report-pin.heat_bad      { background: #ffe0de; }
+.report-pin.shelter_found { background: #dbeafe; }
+.report-pin.danger        { background: #fff3cd; }
+
+/* 제보 카운터 배지 */
+.report-badge { position: absolute; top: -4px; right: -4px; width: 16px; height: 16px; background: var(--red); color: white; border-radius: 50%; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; border: 1.5px solid white; }
 
 /* ── AI CHAT ── */
 .chat-wrap {
@@ -463,6 +560,42 @@ header {
       <button class="map-btn active" id="btn-shade" onclick="toggleShade(this)">🌳 그늘</button>
       <button class="map-btn active" id="btn-shelter-ov" onclick="toggleShelters(this)">🏠 쉼터</button>
       <button class="map-btn" id="btn-click" onclick="toggleClickMode(this)">✏️ 직접 지정</button>
+    </div>
+
+    <!-- 시민 제보 FAB -->
+    <button class="report-fab" id="report-fab" onclick="openReportModal()" title="이 위치 제보하기">
+      📍
+    </button>
+
+    <!-- 제보 모달 -->
+    <div class="report-modal" id="report-modal" onclick="closeReportModal(event)">
+      <div class="report-sheet">
+        <div class="report-handle"></div>
+        <div class="report-title">📍 이 위치 제보하기</div>
+        <div class="report-subtitle" id="report-location-text">지도 중심 위치에 제보합니다</div>
+        <div class="report-types">
+          <button class="report-type-btn" onclick="selectReportType('shade_good', this)">
+            <span class="rt-emoji">🌳</span>
+            <span class="rt-label">그늘 좋음</span>
+          </button>
+          <button class="report-type-btn" onclick="selectReportType('heat_bad', this)">
+            <span class="rt-emoji">🔥</span>
+            <span class="rt-label">열기 심함</span>
+          </button>
+          <button class="report-type-btn" onclick="selectReportType('shelter_found', this)">
+            <span class="rt-emoji">🏠</span>
+            <span class="rt-label">쉼터 발견</span>
+          </button>
+          <button class="report-type-btn" onclick="selectReportType('danger', this)">
+            <span class="rt-emoji">⚠️</span>
+            <span class="rt-label">위험 구간</span>
+          </button>
+        </div>
+        <textarea class="report-comment" id="report-comment" rows="2" placeholder="추가 설명 (선택사항) — 예: 큰 나무 있어요, 아스팔트 복사열 심해요"></textarea>
+        <button class="report-submit" id="report-submit-btn" onclick="submitReport()" disabled>
+          제보 등록
+        </button>
+      </div>
     </div>
 
     <!-- 지도 위 경로 범례 -->
@@ -1323,6 +1456,118 @@ function updateShelterMarkers(shelters) {
 }
 
 // =============================================================================
+//  시민 제보 시스템
+// =============================================================================
+
+let selectedReportType = null;
+let reportMarkers = [];
+let reportLat = null, reportLng = null;
+
+function openReportModal() {
+  const center = map.getCenter();
+  reportLat = center.lat;
+  reportLng = center.lng;
+  document.getElementById('report-location-text').textContent =
+    `현재 지도 중심 위치 (${reportLat.toFixed(4)}, ${reportLng.toFixed(4)})`;
+  selectedReportType = null;
+  document.querySelectorAll('.report-type-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('report-comment').value = '';
+  document.getElementById('report-submit-btn').disabled = true;
+  document.getElementById('report-modal').classList.add('show');
+}
+
+function closeReportModal(e) {
+  if (e.target === document.getElementById('report-modal')) {
+    document.getElementById('report-modal').classList.remove('show');
+  }
+}
+
+function selectReportType(type, btn) {
+  selectedReportType = type;
+  document.querySelectorAll('.report-type-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('report-submit-btn').disabled = false;
+}
+
+async function submitReport() {
+  if (!selectedReportType) return;
+
+  const btn = document.getElementById('report-submit-btn');
+  const comment = document.getElementById('report-comment').value.trim();
+  btn.disabled = true;
+  btn.textContent = '등록 중...';
+
+  try {
+    const res = await fetch(`${API_BASE}/api/reports`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        lat:     reportLat,
+        lng:     reportLng,
+        type:    selectedReportType,
+        comment: comment,
+      }),
+    });
+    const data = await res.json();
+
+    document.getElementById('report-modal').classList.remove('show');
+    toast(data.message);
+
+    // 지도에 제보 마커 추가
+    addReportMarker({ lat: reportLat, lng: reportLng, type: selectedReportType,
+                      ai_tag: data.ai_tag, comment, emoji: getReportEmoji(selectedReportType) });
+
+    // 제보 목록 새로고침
+    loadReports();
+
+  } catch(e) {
+    toast('❌ 제보 등록 중 오류가 발생했습니다.');
+  }
+
+  btn.disabled = false;
+  btn.textContent = '제보 등록';
+}
+
+function getReportEmoji(type) {
+  return { shade_good: '🌳', heat_bad: '🔥', shelter_found: '🏠', danger: '⚠️' }[type] || '📍';
+}
+
+function addReportMarker(r) {
+  const icon = L.divIcon({
+    html: `<div class="report-pin ${r.type}">${r.emoji}</div>`,
+    className: '', iconSize: [28,28], iconAnchor: [14,14],
+  });
+  const m = L.marker([r.lat, r.lng], { icon })
+    .bindPopup(`<b>${r.emoji} ${r.ai_tag || r.type}</b>${r.comment ? '<br>' + r.comment : ''}`)
+    .addTo(map);
+  reportMarkers.push(m);
+}
+
+async function loadReports() {
+  const center = map.getCenter();
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/reports?lat=${center.lat}&lng=${center.lng}&radius=800`
+    );
+    const data = await res.json();
+
+    // 기존 제보 마커 제거
+    reportMarkers.forEach(m => map.removeLayer(m));
+    reportMarkers = [];
+
+    data.reports.forEach(r => addReportMarker(r));
+
+    // FAB 배지 업데이트
+    const fab = document.getElementById('report-fab');
+    if (data.count > 0) {
+      fab.innerHTML = `📍<span class="report-badge">${Math.min(data.count, 99)}</span>`;
+    }
+  } catch(e) {
+    // 오류 시 무시
+  }
+}
+
+// =============================================================================
 //  AI CHAT
 // =============================================================================
 
@@ -1458,10 +1703,15 @@ updateCurrentTime();
 // 1분마다 시각/그림자 자동 갱신
 setInterval(updateCurrentTime, 60000);
 
-// 지도 이동/줌 시 그림자 자동 갱신
+// 지도 이동/줌 시 그림자 + 제보 자동 갱신
 map.on('moveend zoomend', () => {
   if (state.showShade) drawShadows();
 });
+map.on('moveend', () => {
+  clearTimeout(_reportMoveTimer);
+  _reportMoveTimer = setTimeout(loadReports, 1200);
+});
+let _reportMoveTimer = null;
 
 // 페이지 로드 시 현재 지도 중심 기준 쉼터 조회
 // 백엔드 캐시 수집까지 최대 2분 → 폴링으로 자동 갱신
@@ -1525,6 +1775,9 @@ map.on('moveend', () => {
 });
 
 toast('🗺️ 출발지와 목적지를 검색하거나 프리셋을 선택하세요.');
+
+// 초기 제보 로딩
+setTimeout(loadReports, 2000);
 </script>
 </body>
 </html>
