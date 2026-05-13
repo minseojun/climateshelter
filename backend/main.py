@@ -1021,9 +1021,7 @@ async def submit_report(req: ReportRequest):
                 model="claude-sonnet-4-20250514",
                 max_tokens=60,
                 messages=[{"role": "user", "content":
-                    f"보행자 제보: '{req.comment}' / 유형: {meta['label']}
-"
-                    f"이 제보를 10자 이내 핵심 태그로 요약하세요. 태그만 출력."}]
+                    f"보행자 제보: {req.comment} / 유형: " + meta["label"] + "\n이 제보를 10자 이내 핵심 태그로 요약하세요. 태그만 출력."}]
             )
             ai_tag = msg.content[0].text.strip()[:20]
         except:
