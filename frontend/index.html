@@ -1568,7 +1568,16 @@ function selectReportType(type, btn) {
 }
 
 async function submitReport() {
-  if (!selectedReportType) return;
+  if (!selectedReportType) {
+    toast('❌ 제보 유형을 선택해주세요.');
+    return;
+  }
+  if (!reportLat || !reportLng) {
+    toast('❌ 먼저 지도에서 위치를 선택해주세요.');
+    document.getElementById('report-modal').classList.remove('show');
+    toggleReportMode();
+    return;
+  }
 
   const btn = document.getElementById('report-submit-btn');
   const comment = document.getElementById('report-comment').value.trim();
