@@ -1534,8 +1534,7 @@ function toggleReportMode() {
     fab.innerHTML = '📍';
     banner.classList.remove('show');
     map.getContainer().style.cursor = '';
-    if (reportTempMarker) { map.removeLayer(reportTempMarker); reportTempMarker = null; }
-    reportLat = null; reportLng = null;
+    // 좌표는 초기화하지 않음 — 위치 선택 후 모달에서 사용
   }
 }
 
@@ -1599,6 +1598,9 @@ async function submitReport() {
 
     document.getElementById('report-modal').classList.remove('show');
     toast(data.message);
+
+    // 임시 핀 제거 + 좌표 초기화
+    if (reportTempMarker) { map.removeLayer(reportTempMarker); reportTempMarker = null; }
 
     // 지도에 제보 마커 추가
     addReportMarker({ lat: reportLat, lng: reportLng, type: selectedReportType,
