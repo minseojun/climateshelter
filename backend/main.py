@@ -30,8 +30,9 @@ load_dotenv()
 #  서울 무더위쉼터 캐시 — 서버 시작 시 백그라운드 수집
 # =============================================================================
 
-SEOUL_LAT_MIN, SEOUL_LAT_MAX = 37.41, 37.71
-SEOUL_LNG_MIN, SEOUL_LNG_MAX = 126.76, 127.18
+# 한국 전체 좌표 범위
+KOREA_LAT_MIN, KOREA_LAT_MAX = 33.0, 38.5
+KOREA_LNG_MIN, KOREA_LNG_MAX = 124.5, 132.0
 
 _shelter_cache: list[dict] = []      # 수집된 서울 쉼터 전체
 _shelter_cache_ready = False          # 수집 완료 여부
@@ -64,7 +65,7 @@ async def _collect_seoul_shelters():
         except Exception as e:
             print(f"[쉼터 캐시] JSON 파일 로딩 실패: {e}, API로 수집 시작")
 
-    print("[쉼터 캐시] 서울 무더위쉼터 수집 시작...")
+    print("[쉼터 캐시] 전국 무더위쉼터 수집 시작...")
     shelters = []
     page = 1
     headers = {"User-Agent": "ClimateShelter/1.0"}
@@ -126,7 +127,7 @@ async def _collect_seoul_shelters():
 
                 checked = page * 1000
                 if checked % 10000 == 0:
-                    print(f"[쉼터 캐시] {checked}/{total}개 확인, 서울 {len(shelters)}개")
+                    print(f"[쉼터 캐시] {checked}/{total}개 확인, {len(shelters)}개 수집")
 
                 if checked >= total or not items:
                     break
@@ -136,7 +137,7 @@ async def _collect_seoul_shelters():
         _shelter_cache       = shelters
         _shelter_cache_ready = True
         _shelter_cache_time  = time.time()
-        print(f"[쉼터 캐시] 완료 — 서울 무더위쉼터 {len(shelters)}개 캐시됨")
+        print(f"[쉼터 캐시] 완료 — 전국 무더위쉼터 {len(shelters)}개 캐시됨")
 
     except Exception as e:
         import traceback
@@ -299,12 +300,25 @@ async def get_shelters(lat: float, lng: float, radius_m: int = 800) -> list[dict
 
 async def _collect_seoul_trees():
     """
-    서울시 가로수 위치 수집 (서버 시작 시 백그라운드)
-    API: openapi.seoul.go.kr streetTreeInfo
-    총 284,071개 → 페이지당 1000개씩 수집
+    1. trees_slim.json 있으면 즉시 로딩 (Railway 배포용)
+    2. 없으면 서울시 API에서 수집 (로컬 개발용)
     """
     global _tree_cache, _tree_cache_ready
-    print("[가로수 캐시] 서울 가로수 수집 시작...")
+
+    import json as _json
+    slim_file = os.path.join(os.path.dirname(__file__), "trees_slim.json")
+    if os.path.exists(slim_file):
+        try:
+            with open(slim_file, "r", encoding="utf-8") as f:
+                data = _json.load(f)
+            _tree_cache = [{"lat": t[0], "lng": t[1]} for t in data]
+            _tree_cache_ready = True
+            print(f"[가로수 캐시] JSON 파일 로딩 완료 - {len(_tree_cache)}개")
+            return
+        except Exception as e:
+            print(f"[가로수 캐시] JSON 파일 로딩 실패: {e}")
+
+    print("[가로수 캐시] 가로수 수집 시작...")
 
     trees = []
     page_size = 1000
@@ -332,8 +346,8 @@ async def _collect_seoul_trees():
                     lng = float(row.get("LOT") or 0)
                     if lat == 0 or lng == 0:
                         continue
-                    # 서울 범위 필터
-                    if not (37.41 <= lat <= 37.71 and 126.76 <= lng <= 127.18):
+                    # 좌표 유효성 체크
+                    if not (33.0 <= lat <= 38.5 and 124.5 <= lng <= 132.0):
                         continue
                     trees.append({
                         "lat": lat,
@@ -356,7 +370,7 @@ async def _collect_seoul_trees():
 
         _tree_cache       = trees
         _tree_cache_ready = True
-        print(f"[가로수 캐시] 완료 — 서울 가로수 {len(trees)}개 캐시됨")
+        print(f"[가로수 캐시] 완료 — 가로수 {len(trees)}개 캐시됨")
 
     except Exception as e:
         import traceback
@@ -845,7 +859,7 @@ async def chat_agent(req: ChatRequest):
         shelters      = route.get("climate", {}).get("shelter_count", 0)
 
         system_prompt = f"""당신은 ClimateShelter의 AI 경로 안내 어시스턴트입니다.
-현재 서울의 기온은 {temp}°C, 자외선지수는 {uv}입니다.
+현재 기온은 {temp}°C, 자외선지수는 {uv}입니다.
 현재 추천 경로: 그늘 {climate_shade}%, 소요 {climate_time}분, 쉼터 {shelters}개 경유.
 
 사용자의 요청을 분석해서 JSON으로만 응답하세요:
